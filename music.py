@@ -8,6 +8,8 @@ import shutil
 import tempfile
 import aiohttp
 import re
+import subprocess
+import secrets
 from datetime import datetime
 from gtts import gTTS
 
@@ -19,7 +21,7 @@ except Exception:
         print(f"[{event}] {details}")
 
 # ----------------------------------------------------
-# 1. FFmpeg & yt-dlp Configuration
+# 1. FFmpeg & Opus Configuration
 # ----------------------------------------------------
 def load_opus_safely():
     """Ensure libopus is loaded on Linux/Windows for Discord voice audio encoding."""
@@ -37,7 +39,7 @@ def load_opus_safely():
 load_opus_safely()
 
 def get_ffmpeg_executable():
-    """Detect imageio_ffmpeg or system ffmpeg binary with executable permissions."""
+    """Detect imageio_ffmpeg, local binary, or system ffmpeg binary with executable permissions."""
     # 1. Try system ffmpeg
     which_ffmpeg = shutil.which("ffmpeg")
     if which_ffmpeg:
@@ -67,6 +69,31 @@ def get_ffmpeg_executable():
 
     return "ffmpeg"
 
+def create_audio_source(path_or_url: str, is_stream: bool = False, volume: float = 1.0):
+    """
+    Creates an audio source. Tries FFmpegOpusAudio first (bypasses libopus dependencies on Linux),
+    and falls back to FFmpegPCMAudio + PCMVolumeTransformer.
+    """
+    ffmpeg_bin = get_ffmpeg_executable()
+    vol_filter = f'volume={volume}'
+    options = f'-vn -filter:a "{vol_filter}"'
+    before_opts = '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5' if is_stream else None
+
+    # Method A: FFmpegOpusAudio (Native Opus direct from FFmpeg, avoids libopus bugs)
+    try:
+        if before_opts:
+            return discord.FFmpegOpusAudio(path_or_url, executable=ffmpeg_bin, before_options=before_opts, options=options)
+        return discord.FFmpegOpusAudio(path_or_url, executable=ffmpeg_bin, options=options)
+    except Exception as opus_err:
+        print(f"FFmpegOpusAudio fallback to PCMAudio: {opus_err}")
+
+    # Method B: FFmpegPCMAudio + VolumeTransformer
+    if before_opts:
+        pcm = discord.FFmpegPCMAudio(path_or_url, executable=ffmpeg_bin, before_options=before_opts, options="-vn")
+    else:
+        pcm = discord.FFmpegPCMAudio(path_or_url, executable=ffmpeg_bin, options="-vn")
+    return discord.PCMVolumeTransformer(pcm, volume=volume)
+
 YTDL_OPTIONS = {
     'format': 'bestaudio/best',
     'extractaudio': True,
@@ -81,11 +108,6 @@ YTDL_OPTIONS = {
     'no_warnings': True,
     'default_search': 'ytsearch',
     'source_address': '0.0.0.0',
-}
-
-FFMPEG_OPTIONS = {
-    'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
-    'options': '-vn'
 }
 
 ytdl = yt_dlp.YoutubeDL(YTDL_OPTIONS)
@@ -108,14 +130,12 @@ class SpotifyResolver:
 
         async with aiohttp.ClientSession() as session:
             if track_match:
-                # 1. Public Spotify oEmbed
                 try:
                     oembed_url = f"https://open.spotify.com/oembed?url={url}"
                     async with session.get(oembed_url, timeout=7) as resp:
                         if resp.status == 200:
                             data = await resp.json()
                             title = data.get("title", "")
-                            # Try to extract artist from page HTML
                             artist = ""
                             try:
                                 async with session.get(url, timeout=7) as html_resp:
@@ -132,16 +152,14 @@ class SpotifyResolver:
                     print(f"Spotify oEmbed error: {e}")
 
             elif playlist_match:
-                # 2. Extract Playlist / Album Track List from Spotify Embed
                 try:
                     embed_url = f"https://open.spotify.com/embed/{playlist_match.group(1)}/{playlist_match.group(2)}"
                     async with session.get(embed_url, timeout=10) as resp:
                         if resp.status == 200:
                             html = await resp.text()
-                            # Find all track names in embed JSON or HTML
                             matches = re.findall(r'"title":\s*"([^"]+)",\s*"artists":\s*\[{"name":\s*"([^"]+)"', html)
                             if matches:
-                                for t_title, t_artist in matches[:25]:  # limit to first 25 tracks
+                                for t_title, t_artist in matches[:25]:
                                     tracks_to_search.append({
                                         "query": f"{t_title} {t_artist}",
                                         "title": t_title,
@@ -149,7 +167,6 @@ class SpotifyResolver:
                                         "thumb": None
                                     })
                             else:
-                                # Fallback og:title
                                 og_m = re.search(r'<meta property="og:title" content="([^"]+)"', html)
                                 if og_m:
                                     tracks_to_search.append({"query": og_m.group(1), "title": og_m.group(1), "artist": "", "thumb": None})
@@ -161,9 +178,9 @@ class SpotifyResolver:
 # ----------------------------------------------------
 # 3. Audio Source Extractor
 # ----------------------------------------------------
-class YTDLSource(discord.PCMVolumeTransformer):
-    def __init__(self, source, *, data, volume=0.8):
-        super().__init__(source, volume)
+class YTDLSource:
+    def __init__(self, source, *, data):
+        self.source = source
         self.data = data
         self.title = data.get('title')
         self.url = data.get('url')
@@ -173,9 +190,8 @@ class YTDLSource(discord.PCMVolumeTransformer):
         self.uploader = data.get('uploader', 'Unknown')
 
     @classmethod
-    async def from_query(cls, query, *, loop=None, volume=0.8):
+    async def from_query(cls, query, *, loop=None, volume=1.0):
         loop = loop or asyncio.get_event_loop()
-        ffmpeg_bin = get_ffmpeg_executable()
 
         def _extract():
             return ytdl.extract_info(query, download=False)
@@ -185,8 +201,8 @@ class YTDLSource(discord.PCMVolumeTransformer):
         if 'entries' in data:
             data = data['entries'][0]
 
-        source = discord.FFmpegPCMAudio(data['url'], executable=ffmpeg_bin, **FFMPEG_OPTIONS)
-        return cls(source, data=data, volume=volume)
+        audio_src = create_audio_source(data['url'], is_stream=True, volume=volume)
+        return cls(audio_src, data=data)
 
 # ----------------------------------------------------
 # 4. Per-Guild Music Player & Queue
@@ -197,8 +213,7 @@ class GuildMusicPlayer:
         self.guild_id = guild_id
         self.queue = []
         self.current = None
-        self.voice_client = None
-        self.volume = 0.8
+        self.volume = 1.0
         self.loop = False
         self.channel = None
         self.is_playing = False
@@ -218,7 +233,6 @@ class GuildMusicPlayer:
             return
 
         if self.loop and self.current:
-            # Replay current song
             song = self.current
         elif len(self.queue) > 0:
             song = self.queue.pop(0)
@@ -228,7 +242,7 @@ class GuildMusicPlayer:
             self.current = None
             if self.channel:
                 embed = discord.Embed(
-                    description="⏹️ Queue concluded. Add more songs with `/play`!",
+                    description="⏹️ Queue concluded. Add more tracks with `/play`!",
                     color=discord.Color.from_rgb(88, 101, 242)
                 )
                 await self.channel.send(embed=embed)
@@ -236,12 +250,12 @@ class GuildMusicPlayer:
 
         self.is_playing = True
         try:
-            player = await YTDLSource.from_query(song['query'], loop=self.bot.loop, volume=self.volume)
-            song['title'] = player.title
-            song['duration'] = player.duration
-            song['thumbnail'] = player.thumbnail
-            song['webpage_url'] = player.webpage_url
-            song['uploader'] = player.uploader
+            player_info = await YTDLSource.from_query(song['query'], loop=self.bot.loop, volume=self.volume)
+            song['title'] = player_info.title
+            song['duration'] = player_info.duration
+            song['thumbnail'] = player_info.thumbnail
+            song['webpage_url'] = player_info.webpage_url
+            song['uploader'] = player_info.uploader
 
             def after_playing(error):
                 if error:
@@ -252,24 +266,24 @@ class GuildMusicPlayer:
                 except Exception:
                     pass
 
-            vc.play(player, after=after_playing)
+            vc.play(player_info.source, after=after_playing)
 
             if self.channel:
-                mins, secs = divmod(player.duration, 60)
+                mins, secs = divmod(player_info.duration, 60)
                 embed = discord.Embed(
                     title="🎶 Now Playing",
-                    description=f"**[{player.title}]({player.webpage_url})**",
+                    description=f"**[{player_info.title}]({player_info.webpage_url})**",
                     color=discord.Color.from_rgb(87, 242, 135)
                 )
-                if player.thumbnail:
-                    embed.set_thumbnail(url=player.thumbnail)
+                if player_info.thumbnail:
+                    embed.set_thumbnail(url=player_info.thumbnail)
                 embed.add_field(name="Duration", value=f"{mins}:{secs:02d}", inline=True)
-                embed.add_field(name="Channel / Artist", value=player.uploader, inline=True)
+                embed.add_field(name="Channel / Artist", value=player_info.uploader, inline=True)
                 embed.add_field(name="Requested By", value=song.get('requester', 'User'), inline=True)
                 embed.set_footer(text=f"Alpha-X Music Player • Volume: {int(self.volume * 100)}%")
                 await self.channel.send(embed=embed)
 
-            add_log("Music Playing", f"Playing '{player.title}' in guild {self.guild_id}")
+            add_log("Music Playing", f"Playing '{player_info.title}' in guild {self.guild_id}")
 
         except Exception as e:
             print(f"Error playing song {song.get('query')}: {e}")
@@ -317,6 +331,7 @@ class MusicCog(commands.Cog, name="Music & Voice"):
         else:
             try:
                 vc = await voice_channel.connect(timeout=15.0, reconnect=True)
+                await asyncio.sleep(0.5)
             except Exception as e:
                 return None, f"❌ Failed to join voice channel: {e}"
 
@@ -456,12 +471,14 @@ class MusicCog(commands.Cog, name="Music & Voice"):
             await interaction.followup.send("❌ Message cannot be empty.")
             return
 
+        # Unique temp path to eliminate file descriptor locks
+        tmp_filename = f"tts_{secrets.token_hex(6)}.mp3"
+        tmp_path = os.path.join(tempfile.gettempdir(), tmp_filename)
+
         def _generate():
             tts = gTTS(text=clean_text, lang=language, slow=False)
-            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
-            tts.save(tmp.name)
-            tmp.close()
-            return tmp.name
+            tts.save(tmp_path)
+            return tmp_path
 
         try:
             tts_file = await self.bot.loop.run_in_executor(None, _generate)
@@ -469,18 +486,16 @@ class MusicCog(commands.Cog, name="Music & Voice"):
             await interaction.followup.send(f"❌ Failed to generate speech: {e}")
             return
 
-        # Voice socket warm-up delay for UDP handshake
+        # Handshake warm-up delay for voice UDP socket
         await asyncio.sleep(0.6)
 
-        # In discord.py, you cannot call play() if another source is active
+        # Clear any previous audio so discord.py allows new playback
         if vc.is_playing() or vc.is_paused():
             vc.stop()
             await asyncio.sleep(0.3)
 
-        ffmpeg_bin = get_ffmpeg_executable()
         try:
-            tts_source = discord.FFmpegPCMAudio(tts_file, executable=ffmpeg_bin, options="-vn")
-            vol_source = discord.PCMVolumeTransformer(tts_source, volume=1.8)
+            source = create_audio_source(tts_file, is_stream=False, volume=1.8)
         except Exception as src_err:
             await interaction.followup.send(f"❌ Audio Engine Error: `{src_err}` (Check if ffmpeg is installed)")
             return
@@ -499,7 +514,7 @@ class MusicCog(commands.Cog, name="Music & Voice"):
                 pass
 
         try:
-            vc.play(vol_source, after=_after_tts)
+            vc.play(source, after=_after_tts)
         except Exception as play_err:
             await interaction.followup.send(f"❌ Voice Player Error: `{play_err}`")
             return
@@ -526,12 +541,13 @@ class MusicCog(commands.Cog, name="Music & Voice"):
             await ctx.send("❌ Message cannot be empty.")
             return
 
+        tmp_filename = f"tts_{secrets.token_hex(6)}.mp3"
+        tmp_path = os.path.join(tempfile.gettempdir(), tmp_filename)
+
         def _generate():
             tts = gTTS(text=clean_text, lang="en", slow=False)
-            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
-            tts.save(tmp.name)
-            tmp.close()
-            return tmp.name
+            tts.save(tmp_path)
+            return tmp_path
 
         try:
             tts_file = await self.bot.loop.run_in_executor(None, _generate)
@@ -539,18 +555,15 @@ class MusicCog(commands.Cog, name="Music & Voice"):
             await ctx.send(f"❌ TTS Error: {e}")
             return
 
-        # Voice socket warm-up delay
+        # Handshake warm-up delay
         await asyncio.sleep(0.6)
 
-        # Stop previous audio so discord.py allows new playback
         if vc.is_playing() or vc.is_paused():
             vc.stop()
             await asyncio.sleep(0.3)
 
-        ffmpeg_bin = get_ffmpeg_executable()
         try:
-            tts_source = discord.FFmpegPCMAudio(tts_file, executable=ffmpeg_bin, options="-vn")
-            vol_source = discord.PCMVolumeTransformer(tts_source, volume=1.8)
+            source = create_audio_source(tts_file, is_stream=False, volume=1.8)
         except Exception as src_err:
             await ctx.send(f"❌ Audio Engine Error: `{src_err}` (Check if ffmpeg is installed)")
             return
@@ -569,12 +582,88 @@ class MusicCog(commands.Cog, name="Music & Voice"):
                 pass
 
         try:
-            vc.play(vol_source, after=_after_tts)
+            vc.play(source, after=_after_tts)
         except Exception as play_err:
             await ctx.send(f"❌ Voice Player Error: `{play_err}`")
             return
 
         await ctx.send(f"🗣️ Speaking in **{ctx.author.voice.channel.name}**: *\"{clean_text}\"*")
+
+    # ====================================================
+    # DIAGNOSTICS: !debug & !beep
+    # ====================================================
+    @commands.command(name="debug", aliases=["diagnose"])
+    async def cmd_debug(self, ctx):
+        """Diagnose Voice, FFmpeg, Opus, and PyNaCl configuration."""
+        embed = discord.Embed(title="🔍 Alpha-X Voice Diagnostics", color=discord.Color.from_rgb(88, 101, 242))
+
+        # 1. FFmpeg
+        ffmpeg_bin = get_ffmpeg_executable()
+        ffmpeg_ok = False
+        ffmpeg_ver = "Not found"
+        try:
+            res = subprocess.run([ffmpeg_bin, "-version"], capture_output=True, text=True, timeout=5)
+            if res.returncode == 0:
+                ffmpeg_ok = True
+                ffmpeg_ver = res.stdout.split("\n")[0][:45]
+        except Exception as e:
+            ffmpeg_ver = str(e)[:45]
+
+        embed.add_field(
+            name="FFmpeg Binary",
+            value=f"{'✅' if ffmpeg_ok else '❌'} `{ffmpeg_bin}`\n*{ffmpeg_ver}*",
+            inline=False
+        )
+
+        # 2. PyNaCl
+        try:
+            import nacl
+            nacl_ok = True
+        except ImportError:
+            nacl_ok = False
+        embed.add_field(name="PyNaCl (Voice Encryption)", value="✅ Installed" if nacl_ok else "❌ Missing (`pip install PyNaCl`)", inline=True)
+
+        # 3. Opus
+        opus_ok = discord.opus.is_loaded()
+        embed.add_field(name="Opus Codec", value="✅ Loaded" if opus_ok else "⚠️ Built-in (Using FFmpegOpus)", inline=True)
+
+        # 4. Voice Client
+        vc = ctx.guild.voice_client
+        if vc and vc.is_connected():
+            embed.add_field(name="Voice Connection", value=f"✅ Connected to **{vc.channel.name}**\nLatency: {round(vc.latency * 1000)}ms", inline=False)
+        else:
+            embed.add_field(name="Voice Connection", value="❌ Bot is not in a voice channel. Run `!join` first.", inline=False)
+
+        await ctx.send(embed=embed)
+
+    @commands.command(name="beep", aliases=["testtone"])
+    async def cmd_beep(self, ctx):
+        """Play a diagnostic 440Hz test sine tone directly from FFmpeg."""
+        vc, err = await self.ensure_voice(ctx)
+        if err:
+            await ctx.send(err)
+            return
+
+        await ctx.send("🔊 Playing a 3-second diagnostic test tone...")
+        ffmpeg_bin = get_ffmpeg_executable()
+
+        if vc.is_playing() or vc.is_paused():
+            vc.stop()
+            await asyncio.sleep(0.3)
+
+        await asyncio.sleep(0.5)
+
+        try:
+            # Generates a pure 440Hz test tone directly within FFmpeg using lavfi
+            source = discord.FFmpegPCMAudio(
+                "sine=frequency=440:duration=3",
+                executable=ffmpeg_bin,
+                before_options="-f lavfi",
+                options="-vn"
+            )
+            vc.play(source)
+        except Exception as e:
+            await ctx.send(f"❌ Test Tone Error: `{e}`")
 
     # ====================================================
     # CONTROLS: /skip, /pause, /resume, /stop, /queue
