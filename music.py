@@ -21,16 +21,50 @@ except Exception:
 # ----------------------------------------------------
 # 1. FFmpeg & yt-dlp Configuration
 # ----------------------------------------------------
+def load_opus_safely():
+    """Ensure libopus is loaded on Linux/Windows for Discord voice audio encoding."""
+    if not discord.opus.is_loaded():
+        opus_candidates = ['libopus.so.0', 'libopus.so', 'opus', 'libopus-0.x86_64.so', 'libopus.dylib']
+        for cand in opus_candidates:
+            try:
+                discord.opus.load_opus(cand)
+                if discord.opus.is_loaded():
+                    print(f"Loaded Opus library from {cand}")
+                    break
+            except Exception:
+                pass
+
+load_opus_safely()
+
 def get_ffmpeg_executable():
-    """Detect imageio_ffmpeg or system ffmpeg binary."""
-    try:
-        import imageio_ffmpeg
-        return imageio_ffmpeg.get_ffmpeg_exe()
-    except Exception:
-        pass
+    """Detect imageio_ffmpeg or system ffmpeg binary with executable permissions."""
+    # 1. Try system ffmpeg
     which_ffmpeg = shutil.which("ffmpeg")
     if which_ffmpeg:
         return which_ffmpeg
+
+    # 2. Try imageio_ffmpeg
+    try:
+        import imageio_ffmpeg
+        exe = imageio_ffmpeg.get_ffmpeg_exe()
+        if exe and os.path.exists(exe):
+            try:
+                os.chmod(exe, 0o755)
+            except Exception:
+                pass
+            return exe
+    except Exception:
+        pass
+
+    # 3. Check local directory for ./ffmpeg
+    local_ffmpeg = os.path.join(os.path.dirname(__file__), "ffmpeg")
+    if os.path.exists(local_ffmpeg):
+        try:
+            os.chmod(local_ffmpeg, 0o755)
+        except Exception:
+            pass
+        return local_ffmpeg
+
     return "ffmpeg"
 
 YTDL_OPTIONS = {
@@ -417,10 +451,11 @@ class MusicCog(commands.Cog, name="Music & Voice"):
             await interaction.followup.send(err)
             return
 
-        player = self.get_player(interaction.guild_id)
-        clean_text = message.strip()[:350]  # limit to 350 chars for clean voice output
+        clean_text = message.strip()[:350]
+        if not clean_text:
+            await interaction.followup.send("❌ Message cannot be empty.")
+            return
 
-        # Generate TTS audio file in background executor
         def _generate():
             tts = gTTS(text=clean_text, lang=language, slow=False)
             tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
@@ -434,37 +469,47 @@ class MusicCog(commands.Cog, name="Music & Voice"):
             await interaction.followup.send(f"❌ Failed to generate speech: {e}")
             return
 
-        ffmpeg_bin = get_ffmpeg_executable()
-        tts_source = discord.FFmpegPCMAudio(tts_file, executable=ffmpeg_bin)
+        # Voice socket warm-up delay for UDP handshake
+        await asyncio.sleep(0.6)
 
-        # If music is playing, pause it for TTS, then resume
-        was_music_playing = vc.is_playing()
-        if was_music_playing:
-            vc.pause()
-            player.paused_for_tts = True
+        # In discord.py, you cannot call play() if another source is active
+        if vc.is_playing() or vc.is_paused():
+            vc.stop()
+            await asyncio.sleep(0.3)
+
+        ffmpeg_bin = get_ffmpeg_executable()
+        try:
+            tts_source = discord.FFmpegPCMAudio(tts_file, executable=ffmpeg_bin, options="-vn")
+            vol_source = discord.PCMVolumeTransformer(tts_source, volume=1.8)
+        except Exception as src_err:
+            await interaction.followup.send(f"❌ Audio Engine Error: `{src_err}` (Check if ffmpeg is installed)")
+            return
 
         def _after_tts(err):
+            if err:
+                print(f"TTS Audio Playback Error: {err}")
+                asyncio.run_coroutine_threadsafe(
+                    interaction.channel.send(f"⚠️ Voice Output Error: `{err}`"),
+                    self.bot.loop
+                )
             try:
                 if os.path.exists(tts_file):
                     os.remove(tts_file)
             except Exception:
                 pass
 
-            if was_music_playing and player.paused_for_tts:
-                player.paused_for_tts = False
-                try:
-                    vc.resume()
-                except Exception:
-                    pass
-
-        vc.play(tts_source, after=_after_tts)
+        try:
+            vc.play(vol_source, after=_after_tts)
+        except Exception as play_err:
+            await interaction.followup.send(f"❌ Voice Player Error: `{play_err}`")
+            return
 
         embed = discord.Embed(
             title="🗣️ Alpha-X Voice Talk",
-            description=f"Spoke in **{interaction.user.voice.channel.name}**:\n> *\"{clean_text}\"*",
+            description=f"Speaking in **{interaction.user.voice.channel.name}**:\n> *\"{clean_text}\"*",
             color=discord.Color.from_rgb(87, 242, 135)
         )
-        embed.set_footer(text=f"Requested by {interaction.user.display_name} • Lang: {language}")
+        embed.set_footer(text=f"Requested by {interaction.user.display_name} • Lang: {language} • Volume: 180%")
         await interaction.followup.send(embed=embed)
         add_log("TTS Voice", f"@{interaction.user.name} spoke: '{clean_text[:40]}'")
 
@@ -477,6 +522,10 @@ class MusicCog(commands.Cog, name="Music & Voice"):
             return
 
         clean_text = message.strip()[:350]
+        if not clean_text:
+            await ctx.send("❌ Message cannot be empty.")
+            return
+
         def _generate():
             tts = gTTS(text=clean_text, lang="en", slow=False)
             tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
@@ -490,30 +539,42 @@ class MusicCog(commands.Cog, name="Music & Voice"):
             await ctx.send(f"❌ TTS Error: {e}")
             return
 
-        ffmpeg_bin = get_ffmpeg_executable()
-        tts_source = discord.FFmpegPCMAudio(tts_file, executable=ffmpeg_bin)
-        player = self.get_player(ctx.guild.id)
+        # Voice socket warm-up delay
+        await asyncio.sleep(0.6)
 
-        was_music_playing = vc.is_playing()
-        if was_music_playing:
-            vc.pause()
-            player.paused_for_tts = True
+        # Stop previous audio so discord.py allows new playback
+        if vc.is_playing() or vc.is_paused():
+            vc.stop()
+            await asyncio.sleep(0.3)
+
+        ffmpeg_bin = get_ffmpeg_executable()
+        try:
+            tts_source = discord.FFmpegPCMAudio(tts_file, executable=ffmpeg_bin, options="-vn")
+            vol_source = discord.PCMVolumeTransformer(tts_source, volume=1.8)
+        except Exception as src_err:
+            await ctx.send(f"❌ Audio Engine Error: `{src_err}` (Check if ffmpeg is installed)")
+            return
 
         def _after_tts(err):
+            if err:
+                print(f"TTS Audio Playback Error: {err}")
+                asyncio.run_coroutine_threadsafe(
+                    ctx.send(f"⚠️ Voice Output Error: `{err}`"),
+                    self.bot.loop
+                )
             try:
                 if os.path.exists(tts_file):
                     os.remove(tts_file)
             except Exception:
                 pass
-            if was_music_playing and player.paused_for_tts:
-                player.paused_for_tts = False
-                try:
-                    vc.resume()
-                except Exception:
-                    pass
 
-        vc.play(tts_source, after=_after_tts)
-        await ctx.send(f"🗣️ Speaking: *\"{clean_text}\"*")
+        try:
+            vc.play(vol_source, after=_after_tts)
+        except Exception as play_err:
+            await ctx.send(f"❌ Voice Player Error: `{play_err}`")
+            return
+
+        await ctx.send(f"🗣️ Speaking in **{ctx.author.voice.channel.name}**: *\"{clean_text}\"*")
 
     # ====================================================
     # CONTROLS: /skip, /pause, /resume, /stop, /queue
