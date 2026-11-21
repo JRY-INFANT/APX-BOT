@@ -1,13 +1,14 @@
 from http.server import BaseHTTPRequestHandler
 import json
 import os
-import secrets
+import hmac
+import hashlib
+import time
 from urllib.parse import urlparse, parse_qs
 import urllib.request
 import urllib.error
 from datetime import datetime
 
-active_sessions = set()
 activity_logs = []
 
 def add_log(event_type, details, status="success"):
@@ -15,6 +16,29 @@ def add_log(event_type, details, status="success"):
     activity_logs.insert(0, {"time": now, "type": event_type, "details": details, "status": status})
     if len(activity_logs) > 60:
         activity_logs.pop()
+
+def get_secret():
+    pw = os.environ.get("DASHBOARD_PASSWORD", "0000").strip() or "0000"
+    tok = os.environ.get("DISCORD_TOKEN", "").strip()[:12]
+    return f"alphax_{pw}_{tok}".encode("utf-8")
+
+def generate_token():
+    ts = str(int(time.time()))
+    sig = hmac.new(get_secret(), ts.encode("utf-8"), hashlib.sha256).hexdigest()
+    return f"{ts}.{sig}"
+
+def verify_token(token):
+    if not token or "." not in token:
+        return False
+    try:
+        ts, sig = token.split(".", 1)
+        # Token valid for 14 days (1,209,600 seconds)
+        if time.time() - int(ts) > 1209600:
+            return False
+        expected_sig = hmac.new(get_secret(), ts.encode("utf-8"), hashlib.sha256).hexdigest()
+        return hmac.compare_digest(sig, expected_sig)
+    except Exception:
+        return False
 
 def discord_api(endpoint, method="GET", payload=None):
     token = os.environ.get("DISCORD_TOKEN", "").strip()
@@ -59,7 +83,7 @@ class handler(BaseHTTPRequestHandler):
 
     def is_auth(self):
         token = self.headers.get("X-Session-Token", "").strip()
-        return bool(token and token in active_sessions)
+        return verify_token(token)
 
     def do_GET(self):
         parsed = urlparse(self.path)
@@ -110,7 +134,7 @@ class handler(BaseHTTPRequestHandler):
                     "bot_name": bot_user.get("username", "ALPHA - X"),
                     "bot_id": bot_user.get("id", ""),
                     "avatar": avatar_url,
-                    "ping": 42,
+                    "ping": 38,
                     "guild_count": len(guilds_list),
                     "guilds": guilds_list
                 })
@@ -155,10 +179,9 @@ class handler(BaseHTTPRequestHandler):
         # Login
         if path == "/api/login":
             password = (body.get("password") or "").strip()
-            target_pw = os.environ.get("DASHBOARD_PASSWORD", "0000").strip()
+            target_pw = os.environ.get("DASHBOARD_PASSWORD", "0000").strip() or "0000"
             if password == target_pw:
-                token = secrets.token_hex(24)
-                active_sessions.add(token)
+                token = generate_token()
                 add_log("Auth", "Operator unlocked dashboard", "success")
                 return self.send_json(200, {"success": True, "token": token})
             add_log("Auth Failed", "Invalid password attempted", "error")
@@ -166,9 +189,6 @@ class handler(BaseHTTPRequestHandler):
 
         # Logout
         if path == "/api/logout":
-            token = self.headers.get("X-Session-Token", "").strip()
-            if token in active_sessions:
-                active_sessions.remove(token)
             return self.send_json(200, {"success": True})
 
         # Protected: Send Message
