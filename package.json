@@ -1,0 +1,12 @@
+{
+  "name": "alpha-x-dashboard",
+  "version": "1.0.0",
+  "description": "Private web dashboard for Alpha-X Discord Bot",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": ["discord", "dashboard"],
+  "author": "",
+  "license": "ISC"
+}

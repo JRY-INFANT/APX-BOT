@@ -1,0 +1,12 @@
+run = "python alpha-x.py"
+entrypoint = "alpha-x.py"
+
+[nix]
+channel = "stable-23_11"
+
+[deployment]
+run = ["python", "alpha-x.py"]
+
+[[ports]]
+localPort = 5000
+externalPort = 80

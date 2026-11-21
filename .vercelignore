@@ -1,0 +1,7 @@
+requirements.txt
+requirement.txt
+alpha-x.py
+dashboard.py
+discord.log
+*.log
+.env

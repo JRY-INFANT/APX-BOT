@@ -1,0 +1,1074 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ALPHA - X | Private Control Station</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-darkest: #0a0c10;
+      --bg-card: #13161c;
+      --bg-card-hover: #1a1e27;
+      --bg-input: #0c0e14;
+      --border: #222733;
+      --border-focus: #5865f2;
+      --text-main: #f3f4f6;
+      --text-muted: #8b92a0;
+      --discord-blurple: #5865f2;
+      --discord-blurple-hover: #4752c4;
+      --discord-green: #23a55a;
+      --discord-red: #f23f43;
+      --discord-yellow: #f0b232;
+      --radius: 12px;
+      --shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: var(--bg-darkest);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ---------------------------------------------------- */
+    /* 1. PRIVATE LOGIN GATE (Shown when not authenticated) */
+    /* ---------------------------------------------------- */
+    #loginScreen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 24px;
+      background: radial-gradient(circle at top, #191c26 0%, var(--bg-darkest) 70%);
+    }
+
+    .login-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 36px 32px;
+      max-width: 440px;
+      width: 100%;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.7);
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      text-align: center;
+    }
+
+    .shield-icon {
+      width: 64px;
+      height: 64px;
+      margin: 0 auto;
+      border-radius: 50%;
+      background: rgba(88, 101, 242, 0.12);
+      border: 2px solid rgba(88, 101, 242, 0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+    }
+
+    .login-title {
+      font-size: 1.4rem;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+    }
+
+    .login-subtitle {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .login-input {
+      width: 100%;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      color: var(--text-main);
+      padding: 14px 16px;
+      border-radius: 10px;
+      font-size: 1rem;
+      text-align: center;
+      letter-spacing: 1px;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+
+    .login-input:focus {
+      border-color: var(--discord-blurple);
+      box-shadow: 0 0 0 3px rgba(88, 101, 242, 0.25);
+    }
+
+    .login-btn {
+      background: var(--discord-blurple);
+      color: #fff;
+      font-weight: 700;
+      font-size: 1rem;
+      padding: 14px;
+      border-radius: 10px;
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .login-btn:hover {
+      background: var(--discord-blurple-hover);
+      transform: translateY(-1px);
+    }
+
+    .login-error {
+      display: none;
+      color: var(--discord-red);
+      font-size: 0.85rem;
+      font-weight: 600;
+      background: rgba(242, 63, 67, 0.1);
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid rgba(242, 63, 67, 0.25);
+    }
+
+    /* ---------------------------------------------------- */
+    /* 2. PRIVATE DASHBOARD VIEW (Shown once authenticated) */
+    /* ---------------------------------------------------- */
+    #dashboardScreen {
+      display: none;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    header {
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .bot-avatar-wrap {
+      position: relative;
+      width: 44px;
+      height: 44px;
+    }
+
+    .bot-avatar {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      background: #2b2d31;
+      object-fit: cover;
+      border: 2px solid var(--border);
+    }
+
+    .status-dot {
+      position: absolute;
+      bottom: -1px;
+      right: -1px;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background-color: var(--discord-green);
+      border: 3px solid var(--bg-card);
+    }
+
+    .brand-title {
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: var(--text-main);
+    }
+
+    .brand-subtitle {
+      font-size: 0.8rem;
+      color: var(--discord-green);
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+    }
+
+    .badge.online {
+      color: var(--discord-green);
+      border-color: rgba(35, 165, 90, 0.3);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 8px 16px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border: none;
+      outline: none;
+    }
+
+    .btn-secondary {
+      background: var(--bg-input);
+      color: var(--text-main);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg-card-hover);
+      border-color: #40444b;
+    }
+
+    .btn-danger {
+      background: rgba(242, 63, 67, 0.12);
+      color: #ff7b7d;
+      border: 1px solid rgba(242, 63, 67, 0.3);
+    }
+
+    .btn-danger:hover {
+      background: var(--discord-red);
+      color: #fff;
+    }
+
+    .btn-primary {
+      background: var(--discord-blurple);
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      background: var(--discord-blurple-hover);
+      transform: translateY(-1px);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* Main Container */
+    main {
+      flex: 1;
+      max-width: 1200px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 28px 20px;
+      display: grid;
+      grid-template-columns: 1.4fr 1fr;
+      gap: 24px;
+    }
+
+    @media (max-width: 880px) {
+      main {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .card-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 14px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    label {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    select, input[type="text"], textarea {
+      width: 100%;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      color: var(--text-main);
+      padding: 12px 14px;
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    select:focus, input[type="text"]:focus, textarea:focus {
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 2px rgba(88, 101, 242, 0.25);
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 120px;
+      line-height: 1.5;
+    }
+
+    .tabs {
+      display: flex;
+      background: var(--bg-input);
+      border-radius: 8px;
+      padding: 4px;
+      border: 1px solid var(--border);
+      gap: 4px;
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 8px 12px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .tab-btn.active {
+      background: var(--bg-card);
+      color: var(--text-main);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    }
+
+    .quick-tags {
+      display: flex;
+      gap: 8px;
+    }
+
+    .tag-btn {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .tag-btn:hover {
+      color: var(--text-main);
+      border-color: var(--discord-blurple);
+      background: rgba(88, 101, 242, 0.1);
+    }
+
+    .textarea-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .alert-banner {
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      display: none;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .alert-banner.success {
+      display: flex;
+      background: rgba(35, 165, 90, 0.15);
+      border: 1px solid var(--discord-green);
+      color: #57f287;
+    }
+
+    .alert-banner.error {
+      display: flex;
+      background: rgba(242, 63, 67, 0.15);
+      border: 1px solid var(--discord-red);
+      color: #ff7b7d;
+    }
+
+    /* Stats Grid */
+    .stats-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .stat-box {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      padding: 14px;
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .stat-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    .stat-value {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--text-main);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Activity Feed */
+    .activity-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 320px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+
+    .activity-list::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .activity-list::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 4px;
+    }
+
+    .activity-item {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 0.85rem;
+    }
+
+    .activity-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .activity-type {
+      font-weight: 600;
+      color: var(--discord-blurple);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+    }
+
+    .activity-type.error {
+      color: var(--discord-red);
+    }
+
+    .activity-time {
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .activity-details {
+      color: var(--text-main);
+      word-break: break-word;
+      line-height: 1.4;
+    }
+
+    /* Embed Toggle Section */
+    .embed-box {
+      border: 1px solid var(--border);
+      background: var(--bg-input);
+      padding: 14px;
+      border-radius: 8px;
+      display: none;
+      flex-direction: column;
+      gap: 12px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ============================================== -->
+  <!-- 1. LOGIN SCREEN (Strictly Gated Access)        -->
+  <!-- ============================================== -->
+  <div id="loginScreen">
+    <div class="login-card">
+      <div class="shield-icon">🔐</div>
+      <div>
+        <h1 class="login-title">ALPHA - X</h1>
+        <p class="login-subtitle">Private Discord Command & Control Console</p>
+      </div>
+
+      <div class="login-error" id="loginErrorMsg">Incorrect password. Access denied.</div>
+
+      <form onsubmit="handleLoginSubmit(event)" style="display: flex; flex-direction: column; gap: 14px;">
+        <input 
+          type="password" 
+          id="passwordInput" 
+          class="login-input" 
+          placeholder="Enter Operator Password" 
+          autocomplete="current-password"
+          required 
+          autofocus
+        >
+        <button type="submit" class="login-btn" id="loginSubmitBtn">
+          <span>Unlock Console</span> →
+        </button>
+      </form>
+      <div style="font-size: 0.75rem; color: var(--text-muted);">
+        Secured with session authentication & token verification.
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================== -->
+  <!-- 2. PRIVATE DASHBOARD INTERFACE                 -->
+  <!-- ============================================== -->
+  <div id="dashboardScreen">
+    <!-- Header -->
+    <header>
+      <div class="brand">
+        <div class="bot-avatar-wrap">
+          <img id="botAvatar" class="bot-avatar" src="https://cdn.discordapp.com/embed/avatars/0.png" alt="Bot Avatar">
+          <div id="statusDot" class="status-dot"></div>
+        </div>
+        <div>
+          <div class="brand-title" id="botName">ALPHA - X</div>
+          <div class="brand-subtitle">
+            <span>● OPERATOR SESSION ACTIVE</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <div class="badge online" id="pingBadge">⚡ -- ms</div>
+        <button class="btn btn-secondary" onclick="refreshDashboard()" title="Refresh data">
+          ↻ Refresh
+        </button>
+        <button class="btn btn-danger" onclick="logout()" title="Exit Dashboard">
+          🚪 Log Out
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main>
+      <!-- Left Column: Send Message Console -->
+      <div class="card">
+        <div class="card-title">
+          <span>🚀 Dispatch Discord Message</span>
+        </div>
+
+        <!-- Mode Tabs (Channel vs DM) -->
+        <div class="tabs">
+          <button class="tab-btn active" id="tabChannel" onclick="switchMode('channel')"># Channel Message</button>
+          <button class="tab-btn" id="tabDM" onclick="switchMode('dm')">💬 Private User DM</button>
+        </div>
+
+        <!-- Server & Channel Selectors -->
+        <div id="channelSection">
+          <div class="form-group" style="margin-bottom: 14px;">
+            <label for="serverSelect">Target Server (Guild)</label>
+            <select id="serverSelect" onchange="onServerChange()">
+              <option value="">Loading servers...</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="channelSelect">Target Channel</label>
+            <select id="channelSelect">
+              <option value="">Select a server first...</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- DM User ID Input -->
+        <div id="dmSection" style="display: none;">
+          <div class="form-group">
+            <label for="userIdInput">Target User Discord ID</label>
+            <input type="text" id="userIdInput" placeholder="e.g. 742183921829102839">
+            <small style="color: var(--text-muted); font-size: 0.75rem;">
+              Right-click the user in Discord and click "Copy User ID".
+            </small>
+          </div>
+        </div>
+
+        <!-- Embed Options Toggle -->
+        <div style="display: flex; align-items: center; justify-content: space-between; padding-top: 4px;">
+          <label style="margin: 0; cursor: pointer;">
+            <input type="checkbox" id="embedToggle" onchange="toggleEmbedSection()" style="margin-right: 6px;">
+            Send as Rich Embed Card
+          </label>
+        </div>
+
+        <div class="embed-box" id="embedBox">
+          <div class="form-group">
+            <label for="embedTitle">Embed Title</label>
+            <input type="text" id="embedTitle" placeholder="e.g. Announcement / Update">
+          </div>
+          <div class="form-group">
+            <label for="embedColor">Embed Accent Color</label>
+            <input type="text" id="embedColor" value="#5865f2" placeholder="#5865f2">
+          </div>
+        </div>
+
+        <!-- Message Composer -->
+        <div class="form-group">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <label for="messageInput">Message Text / Description</label>
+            <div class="quick-tags">
+              <button type="button" class="tag-btn" onclick="insertTag('@everyone')">@everyone</button>
+              <button type="button" class="tag-btn" onclick="insertTag('@here')">@here</button>
+            </div>
+          </div>
+          <textarea id="messageInput" placeholder="Write your message to send as Alpha-X..." oninput="updateCharCount()"></textarea>
+          <div class="textarea-footer">
+            <span id="charCount">0 / 2000</span>
+            <span>Ctrl + Enter to send</span>
+          </div>
+        </div>
+
+        <!-- Alert Notification -->
+        <div id="alertBanner" class="alert-banner"></div>
+
+        <!-- Send Button -->
+        <button class="btn btn-primary" id="sendBtn" onclick="sendMessage()" style="padding: 14px; font-size: 1rem;">
+          🚀 Send to Discord
+        </button>
+      </div>
+
+      <!-- Right Column: Stats & Logs -->
+      <div style="display: flex; flex-direction: column; gap: 24px;">
+        <!-- Bot Stats Card -->
+        <div class="card">
+          <div class="card-title">
+            <span>📊 Live Bot Telemetry</span>
+          </div>
+          <div class="stats-row">
+            <div class="stat-box">
+              <span class="stat-label">Connected Servers</span>
+              <span class="stat-value" id="statGuilds">0</span>
+            </div>
+            <div class="stat-box">
+              <span class="stat-label">Discord Gateway Ping</span>
+              <span class="stat-value" id="statPing">0 ms</span>
+            </div>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">Bot Discord ID</span>
+            <span class="stat-value" id="statBotId" style="font-size: 0.85rem; color: var(--text-muted);">--</span>
+          </div>
+        </div>
+
+        <!-- Live Activity Log -->
+        <div class="card" style="flex: 1;">
+          <div class="card-title" style="justify-content: space-between;">
+            <span>📋 Audit & Activity Log</span>
+            <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.75rem;" onclick="fetchLogs()">Refresh</button>
+          </div>
+          <div class="activity-list" id="activityList">
+            <div style="color: var(--text-muted); font-size: 0.85rem; text-align: center; padding: 20px;">
+              No actions recorded yet.
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    let currentMode = 'channel';
+    let cachedGuilds = [];
+    let refreshTimer = null;
+
+    function getSessionToken() {
+      return localStorage.getItem('alphax_session_token') || '';
+    }
+
+    function setSessionToken(token) {
+      if (token) {
+        localStorage.setItem('alphax_session_token', token);
+      } else {
+        localStorage.removeItem('alphax_session_token');
+      }
+    }
+
+    function getHeaders() {
+      return {
+        'Content-Type': 'application/json',
+        'X-Session-Token': getSessionToken()
+      };
+    }
+
+    async function checkExistingSession() {
+      const token = getSessionToken();
+      if (!token) {
+        showLoginScreen();
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/verify', { headers: getHeaders() });
+        if (res.ok) {
+          showDashboardScreen();
+          refreshDashboard();
+          startPolling();
+        } else {
+          setSessionToken(null);
+          showLoginScreen();
+        }
+      } catch (err) {
+        showLoginScreen();
+      }
+    }
+
+    function showLoginScreen() {
+      document.getElementById('loginScreen').style.display = 'flex';
+      document.getElementById('dashboardScreen').style.display = 'none';
+      if (refreshTimer) clearInterval(refreshTimer);
+    }
+
+    function showDashboardScreen() {
+      document.getElementById('loginScreen').style.display = 'none';
+      document.getElementById('dashboardScreen').style.display = 'flex';
+    }
+
+    async function handleLoginSubmit(e) {
+      e.preventDefault();
+      const password = document.getElementById('passwordInput').value.trim();
+      const btn = document.getElementById('loginSubmitBtn');
+      const errorMsg = document.getElementById('loginErrorMsg');
+
+      errorMsg.style.display = 'none';
+      btn.disabled = true;
+      btn.innerHTML = 'Verifying...';
+
+      try {
+        const res = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password })
+        });
+
+        const data = await res.json();
+        if (res.ok && data.success) {
+          setSessionToken(data.token);
+          showDashboardScreen();
+          refreshDashboard();
+          startPolling();
+        } else {
+          errorMsg.textContent = data.error || 'Access Denied: Incorrect password.';
+          errorMsg.style.display = 'block';
+        }
+      } catch (err) {
+        errorMsg.textContent = 'Network error connecting to dashboard.';
+        errorMsg.style.display = 'block';
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span>Unlock Console</span> →';
+      }
+    }
+
+    async function logout() {
+      try {
+        await fetch('/api/logout', { method: 'POST', headers: getHeaders() });
+      } catch (e) {}
+      setSessionToken(null);
+      showLoginScreen();
+    }
+
+    function switchMode(mode) {
+      currentMode = mode;
+      document.getElementById('tabChannel').classList.toggle('active', mode === 'channel');
+      document.getElementById('tabDM').classList.toggle('active', mode === 'dm');
+      document.getElementById('channelSection').style.display = mode === 'channel' ? 'block' : 'none';
+      document.getElementById('dmSection').style.display = mode === 'dm' ? 'block' : 'none';
+    }
+
+    function toggleEmbedSection() {
+      const isChecked = document.getElementById('embedToggle').checked;
+      document.getElementById('embedBox').style.display = isChecked ? 'flex' : 'none';
+    }
+
+    function insertTag(tag) {
+      const input = document.getElementById('messageInput');
+      input.value += (input.value ? ' ' : '') + tag + ' ';
+      input.focus();
+      updateCharCount();
+    }
+
+    function updateCharCount() {
+      const count = document.getElementById('messageInput').value.length;
+      const counter = document.getElementById('charCount');
+      counter.textContent = `${count} / 2000`;
+      counter.style.color = count > 2000 ? 'var(--discord-red)' : 'var(--text-muted)';
+    }
+
+    function showAlert(text, type = 'success') {
+      const banner = document.getElementById('alertBanner');
+      banner.className = `alert-banner ${type}`;
+      banner.innerHTML = `<span>${type === 'success' ? '✅' : '❌'}</span> <span>${text}</span>`;
+      setTimeout(() => {
+        banner.className = 'alert-banner';
+      }, 5000);
+    }
+
+    async function fetchStatus() {
+      try {
+        const res = await fetch('/api/status', { headers: getHeaders() });
+        if (res.status === 401) {
+          logout();
+          return;
+        }
+        const data = await res.json();
+
+        if (data.bot_name) document.getElementById('botName').textContent = data.bot_name;
+        if (data.avatar) document.getElementById('botAvatar').src = data.avatar;
+        document.getElementById('statGuilds').textContent = data.guild_count || 0;
+        document.getElementById('statPing').textContent = (data.ping || 0) + ' ms';
+        document.getElementById('pingBadge').textContent = `⚡ ${data.ping || 0} ms`;
+        if (data.bot_id) document.getElementById('statBotId').textContent = data.bot_id;
+
+        if (data.guilds && JSON.stringify(data.guilds) !== JSON.stringify(cachedGuilds)) {
+          cachedGuilds = data.guilds;
+          populateGuilds(data.guilds);
+        }
+      } catch (err) {
+        console.error('Failed to fetch status:', err);
+      }
+    }
+
+    function populateGuilds(guilds) {
+      const select = document.getElementById('serverSelect');
+      select.innerHTML = '<option value="">-- Choose a Discord Server --</option>';
+      guilds.forEach(g => {
+        const opt = document.createElement('option');
+        opt.value = g.id;
+        opt.textContent = `${g.name} (${g.member_count} members)`;
+        select.appendChild(opt);
+      });
+
+      if (guilds.length === 1) {
+        select.value = guilds[0].id;
+        onServerChange();
+      }
+    }
+
+    async function onServerChange() {
+      const guildId = document.getElementById('serverSelect').value;
+      const channelSelect = document.getElementById('channelSelect');
+
+      if (!guildId) {
+        channelSelect.innerHTML = '<option value="">Select a server first...</option>';
+        return;
+      }
+
+      channelSelect.innerHTML = '<option value="">Loading text channels...</option>';
+
+      try {
+        const res = await fetch(`/api/channels?guild_id=${guildId}`, { headers: getHeaders() });
+        const data = await res.json();
+
+        if (data.channels && data.channels.length > 0) {
+          channelSelect.innerHTML = '';
+          data.channels.forEach(ch => {
+            const opt = document.createElement('option');
+            opt.value = ch.id;
+            opt.textContent = `# ${ch.name} [${ch.category}]`;
+            channelSelect.appendChild(opt);
+          });
+        } else {
+          channelSelect.innerHTML = '<option value="">No writable channels found</option>';
+        }
+      } catch (err) {
+        channelSelect.innerHTML = '<option value="">Failed to load channels</option>';
+      }
+    }
+
+    async function sendMessage() {
+      const msg = document.getElementById('messageInput').value.trim();
+      const sendBtn = document.getElementById('sendBtn');
+      const isEmbed = document.getElementById('embedToggle').checked;
+      const embedTitle = document.getElementById('embedTitle').value.trim();
+      const embedColor = document.getElementById('embedColor').value.trim();
+
+      if (!msg && !embedTitle) {
+        showAlert('Please enter message text or an embed title.', 'error');
+        return;
+      }
+
+      const payload = {
+        mode: currentMode,
+        message: msg,
+        is_embed: isEmbed,
+        embed_title: embedTitle,
+        embed_color: embedColor
+      };
+
+      if (currentMode === 'channel') {
+        const channelId = document.getElementById('channelSelect').value;
+        if (!channelId) {
+          showAlert('Please select a target channel.', 'error');
+          return;
+        }
+        payload.channel_id = channelId;
+      } else {
+        const userId = document.getElementById('userIdInput').value.trim();
+        if (!userId) {
+          showAlert('Please enter target Discord User ID.', 'error');
+          return;
+        }
+        payload.user_id = userId;
+      }
+
+      sendBtn.disabled = true;
+      sendBtn.textContent = '⏳ Dispatching...';
+
+      try {
+        const res = await fetch('/api/send', {
+          method: 'POST',
+          headers: getHeaders(),
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+
+        if (res.ok && data.success) {
+          showAlert(currentMode === 'channel' ? `Message sent to #${data.channel}!` : `DM sent to @${data.user}!`, 'success');
+          document.getElementById('messageInput').value = '';
+          document.getElementById('embedTitle').value = '';
+          updateCharCount();
+          fetchLogs();
+        } else {
+          showAlert(data.error || 'Failed to dispatch message.', 'error');
+        }
+      } catch (err) {
+        showAlert('Network error sending message: ' + err.message, 'error');
+      } finally {
+        sendBtn.disabled = false;
+        sendBtn.textContent = '🚀 Send to Discord';
+      }
+    }
+
+    async function fetchLogs() {
+      try {
+        const res = await fetch('/api/logs', { headers: getHeaders() });
+        if (res.status === 401) {
+          logout();
+          return;
+        }
+        const data = await res.json();
+        const list = document.getElementById('activityList');
+
+        if (data.logs && data.logs.length > 0) {
+          list.innerHTML = data.logs.map(log => `
+            <div class="activity-item">
+              <div class="activity-header">
+                <span class="activity-type ${log.status === 'error' ? 'error' : ''}">${log.type}</span>
+                <span class="activity-time">${log.time}</span>
+              </div>
+              <div class="activity-details">${escapeHtml(log.details)}</div>
+            </div>
+          `).join('');
+        } else {
+          list.innerHTML = '<div style="color: var(--text-muted); font-size: 0.85rem; text-align: center; padding: 20px;">No audit logs yet</div>';
+        }
+      } catch (err) {
+        console.error('Failed to fetch logs:', err);
+      }
+    }
+
+    function escapeHtml(str) {
+      return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function refreshDashboard() {
+      fetchStatus();
+      fetchLogs();
+    }
+
+    function startPolling() {
+      if (refreshTimer) clearInterval(refreshTimer);
+      refreshTimer = setInterval(() => {
+        fetchStatus();
+        fetchLogs();
+      }, 6000);
+    }
+
+    // Ctrl + Enter shortcut
+    document.getElementById('messageInput').addEventListener('keydown', function(e) {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        sendMessage();
+      }
+    });
+
+    // Run session check on page boot
+    checkExistingSession();
+  </script>
+</body>
+</html>
