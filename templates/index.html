@@ -891,6 +891,13 @@
         }
         const data = await res.json();
 
+        if (!res.ok || data.error) {
+          const select = document.getElementById('serverSelect');
+          select.innerHTML = `<option value="">⚠️ ${data.error || 'Failed to connect to Discord'}</option>`;
+          showAlert(data.error || 'Discord API connection error', 'error');
+          return;
+        }
+
         if (data.bot_name) document.getElementById('botName').textContent = data.bot_name;
         if (data.avatar) document.getElementById('botAvatar').src = data.avatar;
         document.getElementById('statGuilds').textContent = data.guild_count || 0;
@@ -904,11 +911,17 @@
         }
       } catch (err) {
         console.error('Failed to fetch status:', err);
+        const select = document.getElementById('serverSelect');
+        select.innerHTML = `<option value="">⚠️ Error loading servers</option>`;
       }
     }
 
     function populateGuilds(guilds) {
       const select = document.getElementById('serverSelect');
+      if (!guilds || guilds.length === 0) {
+        select.innerHTML = '<option value="">No servers found (Invite bot to a server first)</option>';
+        return;
+      }
       select.innerHTML = '<option value="">-- Choose a Discord Server --</option>';
       guilds.forEach(g => {
         const opt = document.createElement('option');
