@@ -759,9 +759,11 @@
     }
 
     function getHeaders() {
+      const token = getSessionToken();
       return {
         'Content-Type': 'application/json',
-        'X-Session-Token': getSessionToken()
+        'X-Session-Token': token,
+        'Authorization': 'Bearer ' + token
       };
     }
 
@@ -790,6 +792,8 @@
     function showLoginScreen() {
       document.getElementById('loginScreen').style.display = 'flex';
       document.getElementById('dashboardScreen').style.display = 'none';
+      const errorMsg = document.getElementById('loginErrorMsg');
+      if (errorMsg) errorMsg.style.display = 'none';
       if (refreshTimer) clearInterval(refreshTimer);
     }
 
