@@ -68,9 +68,13 @@ class handler(BaseHTTPRequestHandler):
 
         # Serve Dashboard HTML
         if path in ("/", "/index.html", "/api", "/api/index"):
-            root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            template_path = os.path.join(root, "templates", "index.html")
-            if os.path.exists(template_path):
+            candidates = [
+                os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "templates", "index.html"),
+                os.path.join(os.getcwd(), "templates", "index.html"),
+                os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates", "index.html")
+            ]
+            template_path = next((p for p in candidates if os.path.exists(p)), None)
+            if template_path:
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.end_headers()
