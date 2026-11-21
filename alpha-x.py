@@ -1,10 +1,12 @@
 import discord
 from discord.ext import commands
+from discord import app_commands
 import logging
 from dotenv import load_dotenv
 import os
 import sys
 from dashboard import start_dashboard, add_log
+from music import MusicCog
 
 load_dotenv()
 token = os.getenv('DISCORD_TOKEN')
@@ -24,8 +26,26 @@ intents.members = True
 
 class AlphaBot(commands.Bot):
     async def setup_hook(self):
-        # Starts the private web dashboard server on the bot's event loop
-        await start_dashboard(self)
+        # 1. Register Music Player & Text-To-Speech Cog
+        try:
+            await self.add_cog(MusicCog(self))
+            print("Music & Voice TTS Cog loaded successfully.")
+        except Exception as e:
+            print(f"Failed to load Music Cog: {e}")
+
+        # 2. Start the private web dashboard server on the bot's event loop
+        try:
+            await start_dashboard(self)
+        except Exception as e:
+            print(f"Failed to start dashboard server: {e}")
+
+        # 3. Synchronize Slash Commands globally with Discord
+        try:
+            synced = await self.tree.sync()
+            print(f"Synced {len(synced)} slash command(s) globally with Discord.")
+            add_log("Slash Commands", f"Synced {len(synced)} slash commands globally", "success")
+        except Exception as e:
+            print(f"Failed to sync slash commands: {e}")
 
 bot = AlphaBot(command_prefix='!', intents=intents)
 
@@ -33,6 +53,11 @@ bot = AlphaBot(command_prefix='!', intents=intents)
 async def on_ready():
     print(f"We are ready to go in, {bot.user.name}")
     add_log("Bot Online", f"Ready as {bot.user.name} ({len(bot.guilds)} servers connected)", "success")
+    try:
+        activity = discord.Activity(type=discord.ActivityType.listening, name="/play & /talk")
+        await bot.change_presence(status=discord.Status.online, activity=activity)
+    except Exception:
+        pass
 
 @bot.event
 async def on_message(message):
@@ -47,7 +72,7 @@ async def on_message(message):
     await bot.process_commands(message)
 
 # ----------------------------------------------------
-# Private Commands (Admin / Owner control inside Discord)
+# Private Admin Commands (In Discord)
 # ----------------------------------------------------
 
 @bot.command()

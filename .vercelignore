@@ -1,7 +1,9 @@
 requirements.txt
 requirement.txt
 alpha-x.py
+music.py
 dashboard.py
+replit.nix
 discord.log
 *.log
 .env
