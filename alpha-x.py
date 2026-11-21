@@ -5,10 +5,24 @@ import logging
 from dotenv import load_dotenv
 import os
 import sys
+import subprocess
+
+# Auto-check and self-heal PyNaCl voice encryption dependency
+try:
+    import nacl
+except ImportError:
+    print("[Alpha-X] PyNaCl is missing for Discord voice. Installing PyNaCl, yt-dlp, gTTS...")
+    try:
+        subprocess.run([sys.executable, "-m", "pip", "install", "PyNaCl", "yt-dlp", "gTTS", "imageio-ffmpeg"], check=False)
+        import nacl
+        print("[Alpha-X] PyNaCl installed successfully.")
+    except Exception as e:
+        print(f"[Alpha-X] PyNaCl auto-install note: {e}")
+
 from dashboard import start_dashboard, add_log
 
 try:
-    from music import MusicCog
+    from music import MusicCog, get_ffmpeg_executable
     MUSIC_AVAILABLE = True
 except Exception as e:
     print(f"Warning: could not import MusicCog: {e}")
@@ -61,6 +75,12 @@ bot = AlphaBot(command_prefix='!', intents=intents)
 async def on_ready():
     print(f"We are ready to go in, {bot.user.name}")
     add_log("Bot Online", f"Ready as {bot.user.name} ({len(bot.guilds)} servers connected)", "success")
+    try:
+        ff = get_ffmpeg_executable()
+        print(f"[Alpha-X] Active Audio Engine (FFmpeg): {ff}")
+    except Exception as e:
+        print(f"[Alpha-X] Audio engine check: {e}")
+
     try:
         activity = discord.Activity(type=discord.ActivityType.listening, name="/play & /talk")
         await bot.change_presence(status=discord.Status.online, activity=activity)

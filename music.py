@@ -4,6 +4,7 @@ from discord import app_commands
 import asyncio
 import yt_dlp
 import os
+import sys
 import shutil
 import tempfile
 import aiohttp
@@ -39,13 +40,28 @@ def load_opus_safely():
 load_opus_safely()
 
 def get_ffmpeg_executable():
-    """Detect imageio_ffmpeg, local binary, or system ffmpeg binary with executable permissions."""
-    # 1. Try system ffmpeg
+    """
+    Detects ffmpeg binary.
+    1. Checks local directory for ./ffmpeg (standard for Bot-Hosting.net)
+    2. Checks system PATH
+    3. Checks imageio_ffmpeg
+    4. Auto-downloads standalone static Linux x86_64 binary if on Linux and missing.
+    """
+    # 1. Check local directory for ./ffmpeg
+    local_ffmpeg = os.path.join(os.getcwd(), "ffmpeg")
+    if os.path.exists(local_ffmpeg):
+        try:
+            os.chmod(local_ffmpeg, 0o755)
+        except Exception:
+            pass
+        return local_ffmpeg
+
+    # 2. Try system ffmpeg
     which_ffmpeg = shutil.which("ffmpeg")
     if which_ffmpeg:
         return which_ffmpeg
 
-    # 2. Try imageio_ffmpeg
+    # 3. Try imageio_ffmpeg
     try:
         import imageio_ffmpeg
         exe = imageio_ffmpeg.get_ffmpeg_exe()
@@ -58,14 +74,18 @@ def get_ffmpeg_executable():
     except Exception:
         pass
 
-    # 3. Check local directory for ./ffmpeg
-    local_ffmpeg = os.path.join(os.path.dirname(__file__), "ffmpeg")
-    if os.path.exists(local_ffmpeg):
+    # 4. Auto-download static Linux x86_64 binary if missing on Linux host
+    if os.name != "nt":
         try:
+            print("[FFmpeg] Missing ffmpeg binary on Linux host. Auto-downloading static ffmpeg binary...")
+            import urllib.request
+            url = "https://github.com/eugeneware/ffmpeg-static/releases/download/b4.4/linux-x64"
+            urllib.request.urlretrieve(url, local_ffmpeg)
             os.chmod(local_ffmpeg, 0o755)
-        except Exception:
-            pass
-        return local_ffmpeg
+            print("[FFmpeg] Successfully downloaded static Linux ffmpeg binary to ./ffmpeg!")
+            return local_ffmpeg
+        except Exception as e:
+            print(f"[FFmpeg] Auto-download failed: {e}")
 
     return "ffmpeg"
 
@@ -75,17 +95,17 @@ def create_audio_source(path_or_url: str, is_stream: bool = False, volume: float
     and falls back to FFmpegPCMAudio + PCMVolumeTransformer.
     """
     ffmpeg_bin = get_ffmpeg_executable()
-    vol_filter = f'volume={volume}'
-    options = f'-vn -filter:a "{vol_filter}"'
+    vol_filter = f'volume={volume}' if volume != 1.0 else ''
+    options_opus = f'-vn {"-filter:a " + vol_filter if vol_filter else ""}'.strip()
     before_opts = '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5' if is_stream else None
 
     # Method A: FFmpegOpusAudio (Native Opus direct from FFmpeg, avoids libopus bugs)
     try:
         if before_opts:
-            return discord.FFmpegOpusAudio(path_or_url, executable=ffmpeg_bin, before_options=before_opts, options=options)
-        return discord.FFmpegOpusAudio(path_or_url, executable=ffmpeg_bin, options=options)
+            return discord.FFmpegOpusAudio(path_or_url, executable=ffmpeg_bin, before_options=before_opts, options=options_opus)
+        return discord.FFmpegOpusAudio(path_or_url, executable=ffmpeg_bin, options=options_opus)
     except Exception as opus_err:
-        print(f"FFmpegOpusAudio fallback to PCMAudio: {opus_err}")
+        print(f"FFmpegOpusAudio fallback: {opus_err}")
 
     # Method B: FFmpegPCMAudio + VolumeTransformer
     if before_opts:
@@ -157,7 +177,7 @@ class SpotifyResolver:
                     async with session.get(embed_url, timeout=10) as resp:
                         if resp.status == 200:
                             html = await resp.text()
-                            matches = re.findall(r'"title":\s*"([^"]+)",\s*"artists":\s*\[{"name":\s*"([^"]+)"', html)
+                            matches = re.findall(r'"title":\s*"([^"]+)",\s*"artists":\s*\[\{"name":\s*"([^"]+)"', html)
                             if matches:
                                 for t_title, t_artist in matches[:25]:
                                     tracks_to_search.append({
@@ -471,7 +491,6 @@ class MusicCog(commands.Cog, name="Music & Voice"):
             await interaction.followup.send("❌ Message cannot be empty.")
             return
 
-        # Unique temp path to eliminate file descriptor locks
         tmp_filename = f"tts_{secrets.token_hex(6)}.mp3"
         tmp_path = os.path.join(tempfile.gettempdir(), tmp_filename)
 
@@ -486,16 +505,15 @@ class MusicCog(commands.Cog, name="Music & Voice"):
             await interaction.followup.send(f"❌ Failed to generate speech: {e}")
             return
 
-        # Handshake warm-up delay for voice UDP socket
+        # Voice socket warm-up delay for UDP handshake
         await asyncio.sleep(0.6)
 
-        # Clear any previous audio so discord.py allows new playback
         if vc.is_playing() or vc.is_paused():
             vc.stop()
             await asyncio.sleep(0.3)
 
         try:
-            source = create_audio_source(tts_file, is_stream=False, volume=1.8)
+            source = create_audio_source(tts_file, is_stream=False, volume=2.0)
         except Exception as src_err:
             await interaction.followup.send(f"❌ Audio Engine Error: `{src_err}` (Check if ffmpeg is installed)")
             return
@@ -524,7 +542,7 @@ class MusicCog(commands.Cog, name="Music & Voice"):
             description=f"Speaking in **{interaction.user.voice.channel.name}**:\n> *\"{clean_text}\"*",
             color=discord.Color.from_rgb(87, 242, 135)
         )
-        embed.set_footer(text=f"Requested by {interaction.user.display_name} • Lang: {language} • Volume: 180%")
+        embed.set_footer(text=f"Requested by {interaction.user.display_name} • Lang: {language} • Volume: 200%")
         await interaction.followup.send(embed=embed)
         add_log("TTS Voice", f"@{interaction.user.name} spoke: '{clean_text[:40]}'")
 
@@ -555,7 +573,7 @@ class MusicCog(commands.Cog, name="Music & Voice"):
             await ctx.send(f"❌ TTS Error: {e}")
             return
 
-        # Handshake warm-up delay
+        # Voice socket warm-up delay
         await asyncio.sleep(0.6)
 
         if vc.is_playing() or vc.is_paused():
@@ -563,7 +581,7 @@ class MusicCog(commands.Cog, name="Music & Voice"):
             await asyncio.sleep(0.3)
 
         try:
-            source = create_audio_source(tts_file, is_stream=False, volume=1.8)
+            source = create_audio_source(tts_file, is_stream=False, volume=2.0)
         except Exception as src_err:
             await ctx.send(f"❌ Audio Engine Error: `{src_err}` (Check if ffmpeg is installed)")
             return
@@ -654,7 +672,6 @@ class MusicCog(commands.Cog, name="Music & Voice"):
         await asyncio.sleep(0.5)
 
         try:
-            # Generates a pure 440Hz test tone directly within FFmpeg using lavfi
             source = discord.FFmpegPCMAudio(
                 "sine=frequency=440:duration=3",
                 executable=ffmpeg_bin,
