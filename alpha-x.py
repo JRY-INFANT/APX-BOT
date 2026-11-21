@@ -6,7 +6,14 @@ from dotenv import load_dotenv
 import os
 import sys
 from dashboard import start_dashboard, add_log
-from music import MusicCog
+
+try:
+    from music import MusicCog
+    MUSIC_AVAILABLE = True
+except Exception as e:
+    print(f"Warning: could not import MusicCog: {e}")
+    MusicCog = None
+    MUSIC_AVAILABLE = False
 
 load_dotenv()
 token = os.getenv('DISCORD_TOKEN')
@@ -27,11 +34,12 @@ intents.members = True
 class AlphaBot(commands.Bot):
     async def setup_hook(self):
         # 1. Register Music Player & Text-To-Speech Cog
-        try:
-            await self.add_cog(MusicCog(self))
-            print("Music & Voice TTS Cog loaded successfully.")
-        except Exception as e:
-            print(f"Failed to load Music Cog: {e}")
+        if MUSIC_AVAILABLE and MusicCog:
+            try:
+                await self.add_cog(MusicCog(self))
+                print("Music & Voice TTS Cog loaded successfully.")
+            except Exception as e:
+                print(f"Failed to load Music Cog: {e}")
 
         # 2. Start the private web dashboard server on the bot's event loop
         try:
@@ -63,6 +71,32 @@ async def on_ready():
 async def on_message(message):
     if message.author == bot.user:
         return
+
+    content = message.content.strip()
+
+    # Intelligent fallback: If user types slash command as regular text message (e.g. /play query: Song or /join)
+    if content.startswith("/"):
+        parts = content[1:].split(" ", 1)
+        cmd_name = parts[0].lower()
+        args = parts[1].strip() if len(parts) > 1 else ""
+
+        # Strip "query:" or "message:" if typed literally
+        if cmd_name == "play" and args.lower().startswith("query:"):
+            args = args[6:].strip()
+        elif cmd_name == "talk" and args.lower().startswith("message:"):
+            args = args[8:].strip()
+
+        command = bot.get_command(cmd_name)
+        if command:
+            ctx = await bot.get_context(message)
+            try:
+                if args:
+                    await ctx.invoke(command, query=args if "query" in command.clean_params else args)
+                else:
+                    await ctx.invoke(command)
+                return
+            except Exception as e:
+                print(f"Command execution error: {e}")
 
     if 'hello' in message.content.lower():
         await message.channel.send(f'Hello {message.author.mention}!')

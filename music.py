@@ -680,6 +680,14 @@ class MusicCog(commands.Cog, name="Music & Voice"):
         else:
             await interaction.response.send_message(f"🔊 Connected to **{vc.channel.name}**!")
 
+    @commands.command(name="join", aliases=["j"])
+    async def cmd_join(self, ctx):
+        vc, err = await self.ensure_voice(ctx)
+        if err:
+            await ctx.send(err)
+        else:
+            await ctx.send(f"🔊 Connected to **{vc.channel.name}**!")
+
     @app_commands.command(name="leave", description="Disconnect the bot from voice")
     async def slash_leave(self, interaction: discord.Interaction):
         vc = interaction.guild.voice_client
@@ -690,6 +698,17 @@ class MusicCog(commands.Cog, name="Music & Voice"):
             await interaction.response.send_message("👋 Disconnected from voice channel.")
         else:
             await interaction.response.send_message("❌ I am not connected to any voice channel.", ephemeral=True)
+
+    @commands.command(name="leave", aliases=["dc", "disconnect"])
+    async def cmd_leave(self, ctx):
+        vc = ctx.guild.voice_client
+        if vc:
+            player = self.get_player(ctx.guild.id)
+            player.stop()
+            await vc.disconnect()
+            await ctx.send("👋 Disconnected from voice channel.")
+        else:
+            await ctx.send("❌ I am not connected to any voice channel.")
 
 async def setup(bot):
     await bot.add_cog(MusicCog(bot))
