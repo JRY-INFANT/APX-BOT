@@ -32,7 +32,6 @@ def verify_token(token):
         return False
     try:
         ts, sig = token.split(".", 1)
-        # Token valid for 14 days
         if time.time() - int(ts) > 1209600:
             return False
         expected_sig = hmac.new(get_secret(), ts.encode("utf-8"), hashlib.sha256).hexdigest()
@@ -48,13 +47,16 @@ def discord_api(endpoint, method="GET", payload=None):
     headers = {
         "Authorization": f"Bot {token}",
         "Content-Type": "application/json",
-        "User-Agent": "AlphaX-Dashboard/1.0"
+        "User-Agent": "AlphaX-Dashboard/2.0"
     }
-    data = json.dumps(payload).encode("utf-8") if payload else None
+    data = json.dumps(payload).encode("utf-8") if payload is not None else None
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
     try:
         with urllib.request.urlopen(req) as response:
-            return json.loads(response.read().decode("utf-8"))
+            if response.status == 204:
+                return {}
+            resp_body = response.read().decode("utf-8")
+            return json.loads(resp_body) if resp_body else {}
     except urllib.error.HTTPError as e:
         err_body = e.read().decode("utf-8")
         try:
@@ -70,7 +72,7 @@ class handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json")
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Session-Token, Authorization")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS, DELETE, PUT")
         self.end_headers()
         self.wfile.write(json.dumps(data).encode("utf-8"))
 
@@ -78,7 +80,7 @@ class handler(BaseHTTPRequestHandler):
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Session-Token, Authorization")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS, DELETE, PUT")
         self.end_headers()
 
     def is_auth(self):
@@ -93,12 +95,10 @@ class handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         query = parse_qs(parsed.query)
 
-        # Check rewritten endpoint parameter
         if "endpoint" in query:
             ep = query["endpoint"][0].strip("/")
             return f"/api/{ep}"
 
-        # Check Vercel routing headers
         matched = self.headers.get("x-matched-path", "").strip()
         if matched:
             return urlparse(matched).path.rstrip("/")
@@ -114,12 +114,12 @@ class handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         query = parse_qs(parsed.query)
 
-        # Verify Session
+        # 1. Verify Session
         if resolved_path == "/api/verify":
             valid = self.is_auth()
             return self.send_json(200 if valid else 401, {"valid": valid})
 
-        # Protected: Status & Guilds
+        # 2. Status & Guilds
         if resolved_path == "/api/status":
             if not self.is_auth():
                 return self.send_json(401, {"error": "Unauthorized: Session invalid or expired"})
@@ -139,14 +139,14 @@ class handler(BaseHTTPRequestHandler):
                     "bot_name": bot_user.get("username", "ALPHA - X"),
                     "bot_id": bot_user.get("id", ""),
                     "avatar": avatar_url,
-                    "ping": 38,
+                    "ping": 35,
                     "guild_count": len(guilds_list),
                     "guilds": guilds_list
                 })
             except Exception as e:
                 return self.send_json(500, {"online": False, "error": str(e)})
 
-        # Protected: Channels
+        # 3. Channels in a Guild
         if resolved_path == "/api/channels":
             if not self.is_auth():
                 return self.send_json(401, {"error": "Unauthorized: Session invalid or expired"})
@@ -158,19 +158,51 @@ class handler(BaseHTTPRequestHandler):
                 text_channels = [{
                     "id": c["id"],
                     "name": c["name"],
+                    "topic": c.get("topic", ""),
                     "category": "Text Channels"
                 } for c in (channels or []) if c.get("type") in (0, 5)]
                 return self.send_json(200, {"channels": text_channels})
             except Exception as e:
                 return self.send_json(500, {"error": str(e)})
 
-        # Protected: Logs
+        # 4. Read Live Channel Messages (Chat Viewer)
+        if resolved_path == "/api/messages":
+            if not self.is_auth():
+                return self.send_json(401, {"error": "Unauthorized: Session invalid or expired"})
+            channel_id = query.get("channel_id", [""])[0]
+            if not channel_id:
+                return self.send_json(400, {"error": "Missing channel_id parameter"})
+            try:
+                msgs = discord_api(f"/channels/{channel_id}/messages?limit=25")
+                formatted = []
+                for m in (msgs or []):
+                    author = m.get("author", {})
+                    avatar_id = author.get("avatar")
+                    user_id = author.get("id")
+                    avatar_url = f"https://cdn.discordapp.com/avatars/{user_id}/{avatar_id}.png" if avatar_id else "https://cdn.discordapp.com/embed/avatars/0.png"
+                    formatted.append({
+                        "id": m.get("id"),
+                        "content": m.get("content", ""),
+                        "author": {
+                            "id": user_id,
+                            "name": author.get("username", "Unknown"),
+                            "avatar": avatar_url,
+                            "is_bot": bool(author.get("bot"))
+                        },
+                        "timestamp": m.get("timestamp", ""),
+                        "embeds": m.get("embeds", [])
+                    })
+                return self.send_json(200, {"messages": formatted})
+            except Exception as e:
+                return self.send_json(500, {"error": str(e)})
+
+        # 5. Activity Logs
         if resolved_path == "/api/logs":
             if not self.is_auth():
                 return self.send_json(401, {"error": "Unauthorized: Session invalid or expired"})
             return self.send_json(200, {"logs": activity_logs})
 
-        # Default: Serve Dashboard HTML Interface
+        # Default: Serve Modern HTML Dashboard
         candidates = [
             os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "templates", "index.html"),
             os.path.join(os.getcwd(), "templates", "index.html"),
@@ -190,7 +222,6 @@ class handler(BaseHTTPRequestHandler):
     def do_POST(self):
         resolved_path = self.get_resolved_path()
 
-        # Read JSON body
         content_len = int(self.headers.get("Content-Length", 0))
         body = {}
         if content_len > 0:
@@ -199,50 +230,94 @@ class handler(BaseHTTPRequestHandler):
             except Exception:
                 return self.send_json(400, {"error": "Invalid JSON format"})
 
-        # Login endpoint (Public)
+        # Login
         if resolved_path == "/api/login":
             password = (body.get("password") or "").strip()
             target_pw = os.environ.get("DASHBOARD_PASSWORD", "0000").strip() or "0000"
             if password == target_pw:
                 token = generate_token()
-                add_log("Auth", "Operator unlocked dashboard", "success")
+                add_log("Auth", "Operator unlocked console", "success")
                 return self.send_json(200, {"success": True, "token": token})
             add_log("Auth Failed", "Invalid password attempted", "error")
             return self.send_json(401, {"error": "Access Denied: Incorrect operator password"})
 
-        # Logout endpoint
+        # Logout
         if resolved_path == "/api/logout":
             return self.send_json(200, {"success": True})
 
-        # Protected: Send Message
+        # Protected operations
         if not self.is_auth():
             return self.send_json(401, {"error": "Unauthorized: Session invalid or expired"})
 
+        # Dispatch Message / Embed
         if resolved_path == "/api/send":
             mode = body.get("mode", "channel")
             message = (body.get("message") or "").strip()
-            is_embed = bool(body.get("is_embed"))
-            embed_title = (body.get("embed_title") or "").strip()
-            embed_color = body.get("embed_color", "#5865f2").replace("#", "")
-
-            if not message and not embed_title:
-                return self.send_json(400, {"error": "Message or Embed Title is required"})
-
+            reply_to = body.get("reply_to_id")
+            
             payload = {}
-            if message and not is_embed:
+            if message:
                 payload["content"] = message
 
-            if is_embed:
+            # Advanced Embed Handling
+            if body.get("is_embed"):
+                embed_obj = {}
+                if body.get("embed_title"):
+                    embed_obj["title"] = body["embed_title"].strip()
+                if body.get("embed_description"):
+                    embed_obj["description"] = body["embed_description"].strip()
+                if body.get("embed_url"):
+                    embed_obj["url"] = body["embed_url"].strip()
+
+                color_hex = (body.get("embed_color") or "#5865f2").replace("#", "")
                 try:
-                    color_int = int(embed_color, 16)
+                    embed_obj["color"] = int(color_hex, 16)
                 except Exception:
-                    color_int = 0x5865F2
-                payload["embeds"] = [{
-                    "title": embed_title or None,
-                    "description": message or None,
-                    "color": color_int,
-                    "footer": {"text": "Dispatched via Alpha-X Console"}
-                }]
+                    embed_obj["color"] = 0x5865F2
+
+                if body.get("embed_author"):
+                    author_data = {"name": body["embed_author"].strip()}
+                    if body.get("embed_author_icon"):
+                        author_data["icon_url"] = body["embed_author_icon"].strip()
+                    embed_obj["author"] = author_data
+
+                if body.get("embed_footer"):
+                    footer_data = {"text": body["embed_footer"].strip()}
+                    if body.get("embed_footer_icon"):
+                        footer_data["icon_url"] = body["embed_footer_icon"].strip()
+                    embed_obj["footer"] = footer_data
+                else:
+                    embed_obj["footer"] = {"text": "Dispatched via Alpha-X Console"}
+
+                if body.get("embed_thumbnail"):
+                    embed_obj["thumbnail"] = {"url": body["embed_thumbnail"].strip()}
+
+                if body.get("embed_image"):
+                    embed_obj["image"] = {"url": body["embed_image"].strip()}
+
+                # Custom Fields
+                fields = body.get("embed_fields", [])
+                if isinstance(fields, list) and fields:
+                    valid_fields = []
+                    for f in fields:
+                        name = (f.get("name") or "").strip()
+                        val = (f.get("value") or "").strip()
+                        if name and val:
+                            valid_fields.append({"name": name, "value": val, "inline": bool(f.get("inline"))})
+                    if valid_fields:
+                        embed_obj["fields"] = valid_fields
+
+                if body.get("embed_timestamp"):
+                    embed_obj["timestamp"] = datetime.utcnow().isoformat()
+
+                payload["embeds"] = [embed_obj]
+
+            # Message reply reference
+            if reply_to:
+                payload["message_reference"] = {"message_id": str(reply_to).strip()}
+
+            if not payload.get("content") and not payload.get("embeds"):
+                return self.send_json(400, {"error": "Message content or Embed is required"})
 
             try:
                 if mode == "channel":
@@ -250,7 +325,8 @@ class handler(BaseHTTPRequestHandler):
                     if not channel_id:
                         return self.send_json(400, {"error": "channel_id is required"})
                     sent = discord_api(f"/channels/{channel_id}/messages", method="POST", payload=payload)
-                    add_log("Message Sent", f"Dispatched to channel ID {channel_id}", "success")
+                    preview = (body.get("embed_title") or message)[:40]
+                    add_log("Message Dispatched", f"To channel ID {channel_id}: {preview}", "success")
                     return self.send_json(200, {"success": True, "message_id": sent.get("id"), "channel": channel_id})
                 elif mode == "dm":
                     user_id = body.get("user_id")
@@ -258,8 +334,22 @@ class handler(BaseHTTPRequestHandler):
                         return self.send_json(400, {"error": "user_id is required"})
                     dm_channel = discord_api("/users/@me/channels", method="POST", payload={"recipient_id": user_id})
                     sent = discord_api(f"/channels/{dm_channel['id']}/messages", method="POST", payload=payload)
-                    add_log("DM Sent", f"Dispatched DM to user ID {user_id}", "success")
+                    preview = (body.get("embed_title") or message)[:40]
+                    add_log("DM Dispatched", f"To User ID {user_id}: {preview}", "success")
                     return self.send_json(200, {"success": True, "message_id": sent.get("id"), "user": user_id})
+            except Exception as e:
+                return self.send_json(500, {"error": str(e)})
+
+        # Delete message
+        if resolved_path == "/api/delete-message":
+            channel_id = body.get("channel_id")
+            message_id = body.get("message_id")
+            if not channel_id or not message_id:
+                return self.send_json(400, {"error": "channel_id and message_id are required"})
+            try:
+                discord_api(f"/channels/{channel_id}/messages/{message_id}", method="DELETE")
+                add_log("Message Deleted", f"Deleted message ID {message_id}", "info")
+                return self.send_json(200, {"success": True})
             except Exception as e:
                 return self.send_json(500, {"error": str(e)})
 
