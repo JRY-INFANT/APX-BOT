@@ -3,21 +3,21 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ALPHA - X | Advanced Discord Command & Control</title>
+  <title>ALPHA - X | Command & Control Dashboard</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg-darkest: #090a0f;
-      --bg-panel: #11131a;
-      --bg-card: #161822;
-      --bg-card-hover: #1e212d;
-      --bg-input: #0c0e14;
-      --border: #232736;
+      --bg-darkest: #0a0b10;
+      --bg-panel: #11131c;
+      --bg-card: #161824;
+      --bg-card-hover: #1e2130;
+      --bg-input: #0c0e16;
+      --border: #23273a;
       --border-focus: #5865f2;
       --text-main: #f2f3f5;
-      --text-muted: #8b92a0;
+      --text-muted: #8b92a5;
       --discord-blurple: #5865f2;
       --discord-blurple-hover: #4752c4;
       --discord-green: #57f287;
@@ -43,7 +43,7 @@
     }
 
     /* ---------------------------------------------------- */
-    /* 1. LOGIN GATE                                        */
+    /* 1. LOGIN SCREEN                                      */
     /* ---------------------------------------------------- */
     #loginScreen {
       display: flex;
@@ -52,7 +52,7 @@
       justify-content: center;
       min-height: 100vh;
       padding: 24px;
-      background: radial-gradient(circle at top, #1a1e2e 0%, var(--bg-darkest) 75%);
+      background: radial-gradient(circle at top, #1c2138 0%, var(--bg-darkest) 75%);
     }
 
     .login-card {
@@ -65,7 +65,7 @@
       box-shadow: 0 24px 50px rgba(0,0,0,0.75);
       display: flex;
       flex-direction: column;
-      gap: 24px;
+      gap: 22px;
       text-align: center;
       backdrop-filter: blur(12px);
     }
@@ -89,11 +89,9 @@
       background: var(--bg-input);
       border: 1px solid var(--border);
       color: var(--text-main);
-      padding: 14px 16px;
+      padding: 13px 16px;
       border-radius: 10px;
-      font-size: 1.1rem;
-      text-align: center;
-      letter-spacing: 2px;
+      font-size: 1rem;
       outline: none;
       transition: all 0.2s ease;
     }
@@ -121,7 +119,7 @@
     }
 
     /* ---------------------------------------------------- */
-    /* 2. MAIN CONSOLE & HEADER                             */
+    /* 2. MAIN HEADER & NAVIGATION                          */
     /* ---------------------------------------------------- */
     #dashboardScreen {
       display: none;
@@ -140,6 +138,8 @@
       top: 0;
       z-index: 100;
       box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+      gap: 16px;
+      flex-wrap: wrap;
     }
 
     .brand {
@@ -193,6 +193,19 @@
       letter-spacing: 0.5px;
     }
 
+    .operator-tag {
+      background: rgba(87, 242, 135, 0.12);
+      border: 1px solid rgba(87, 242, 135, 0.25);
+      color: var(--discord-green);
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 20px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
     .header-nav {
       display: flex;
       background: var(--bg-input);
@@ -200,6 +213,7 @@
       border-radius: 10px;
       border: 1px solid var(--border);
       gap: 4px;
+      overflow-x: auto;
     }
 
     .nav-tab-btn {
@@ -215,6 +229,7 @@
       display: flex;
       align-items: center;
       gap: 6px;
+      white-space: nowrap;
     }
 
     .nav-tab-btn:hover { color: var(--text-main); }
@@ -224,10 +239,25 @@
       box-shadow: 0 2px 8px rgba(0,0,0,0.3);
     }
 
+    .badge {
+      background: var(--discord-blurple);
+      color: #fff;
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 10px;
+      margin-left: 2px;
+    }
+
+    .badge-green {
+      background: var(--discord-green);
+      color: #000;
+    }
+
     .header-actions {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
     }
 
     .btn {
@@ -280,11 +310,32 @@
     .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 
     /* ---------------------------------------------------- */
-    /* 3. APP CONTAINER & PANELS                            */
+    /* 3. TARGET SELECTOR BAR                               */
+    /* ---------------------------------------------------- */
+    .target-bar {
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 28px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .target-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 1;
+      min-width: 240px;
+    }
+
+    /* ---------------------------------------------------- */
+    /* 4. MAIN PANELS & CARDS                               */
     /* ---------------------------------------------------- */
     main {
       flex: 1;
-      max-width: 1380px;
+      max-width: 1400px;
       width: 100%;
       margin: 0 auto;
       padding: 24px 20px;
@@ -314,7 +365,6 @@
       padding-bottom: 14px;
     }
 
-    /* Form Fields */
     .form-group {
       display: flex;
       flex-direction: column;
@@ -329,7 +379,7 @@
       letter-spacing: 0.5px;
     }
 
-    select, input[type="text"], input[type="url"], textarea {
+    select, input[type="text"], input[type="url"], input[type="password"], textarea {
       width: 100%;
       background: var(--bg-input);
       border: 1px solid var(--border);
@@ -342,7 +392,7 @@
       transition: all 0.2s;
     }
 
-    select:focus, input[type="text"]:focus, input[type="url"]:focus, textarea:focus {
+    select:focus, input[type="text"]:focus, input[type="url"]:focus, input[type="password"]:focus, textarea:focus {
       border-color: var(--border-focus);
       box-shadow: 0 0 0 2px rgba(88, 101, 242, 0.25);
     }
@@ -353,7 +403,7 @@
       line-height: 1.5;
     }
 
-    /* Markdown & Preset Toolbar */
+    /* Toolbar */
     .toolbar {
       display: flex;
       align-items: center;
@@ -396,7 +446,7 @@
     }
 
     /* ---------------------------------------------------- */
-    /* 4. REAL-TIME DISCORD EMBED LIVE PREVIEW              */
+    /* 5. EMBED STUDIO & DISCORD PREVIEW                    */
     /* ---------------------------------------------------- */
     .embed-studio-grid {
       display: grid;
@@ -548,17 +598,11 @@
       margin-top: 6px;
     }
 
-    .discord-embed-footer img {
-      width: 18px;
-      height: 18px;
-      border-radius: 50%;
-    }
-
-    /* Color Palette */
     .color-swatches {
       display: flex;
       gap: 8px;
       align-items: center;
+      flex-wrap: wrap;
     }
 
     .color-swatch {
@@ -576,7 +620,7 @@
     }
 
     /* ---------------------------------------------------- */
-    /* 5. LIVE CHANNEL FEED (Chat Reader)                   */
+    /* 6. LIVE CHANNEL FEED (Chat Reader)                   */
     /* ---------------------------------------------------- */
     .chat-feed-box {
       background: var(--bg-input);
@@ -640,7 +684,137 @@
       word-break: break-word;
     }
 
-    /* Toast Notification */
+    /* ---------------------------------------------------- */
+    /* 7. OPERATORS & USERS LIST (Requested Feature)        */
+    /* ---------------------------------------------------- */
+    .operators-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 18px;
+    }
+
+    .operator-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      position: relative;
+      transition: all 0.2s ease;
+    }
+
+    .operator-card:hover {
+      border-color: var(--discord-blurple);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    }
+
+    .op-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .op-avatar-circle {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #5865f2, #eb459e);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.25rem;
+      font-weight: 800;
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(88, 101, 242, 0.35);
+      position: relative;
+    }
+
+    .op-online-dot {
+      position: absolute;
+      bottom: 0;
+      right: 0;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--discord-green);
+      border: 3px solid var(--bg-card);
+      box-shadow: 0 0 8px rgba(87, 242, 135, 0.8);
+    }
+
+    .op-offline-dot {
+      position: absolute;
+      bottom: 0;
+      right: 0;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      border: 3px solid var(--bg-card);
+    }
+
+    .op-details {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .op-name {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .op-status-badge {
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      width: fit-content;
+    }
+
+    .op-status-online {
+      background: rgba(87, 242, 135, 0.15);
+      color: var(--discord-green);
+      border: 1px solid rgba(87, 242, 135, 0.3);
+    }
+
+    .op-status-idle {
+      background: rgba(254, 231, 92, 0.15);
+      color: var(--discord-yellow);
+      border: 1px solid rgba(254, 231, 92, 0.3);
+    }
+
+    .op-meta-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      background: var(--bg-input);
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      font-size: 0.82rem;
+    }
+
+    .op-meta-row {
+      display: flex;
+      justify-content: space-between;
+      color: var(--text-muted);
+    }
+
+    .op-meta-val {
+      color: var(--text-main);
+      font-weight: 600;
+    }
+
+    /* Toast */
     #toastContainer {
       position: fixed;
       bottom: 24px;
@@ -685,17 +859,28 @@
       <div class="shield-icon">⚡</div>
       <div>
         <h1 style="font-size: 1.5rem; font-weight: 800;">ALPHA - X</h1>
-        <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 4px;">Advanced Discord Command & Control System</p>
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 4px;">Private Discord Command & Control Console</p>
       </div>
 
       <div class="login-error" id="loginErrorMsg" style="display:none; color: var(--discord-red); background: rgba(237,66,69,0.1); padding: 10px; border-radius: 8px; border: 1px solid rgba(237,66,69,0.3); font-size: 0.85rem;"></div>
 
-      <form onsubmit="handleLoginSubmit(event)" style="display: flex; flex-direction: column; gap: 14px;">
-        <input type="password" id="passwordInput" class="login-input" placeholder="Operator Passcode" required autofocus>
+      <form onsubmit="handleLoginSubmit(event)" style="display: flex; flex-direction: column; gap: 14px; text-align: left;">
+        <div class="form-group">
+          <label>Operator Call-Sign / Name</label>
+          <input type="text" id="operatorNameInput" class="login-input" placeholder="e.g. Ace, Admin, Staff" required>
+        </div>
+        <div class="form-group">
+          <label>Operator Passcode</label>
+          <input type="password" id="passwordInput" class="login-input" placeholder="••••" required>
+        </div>
         <button type="submit" class="login-btn" id="loginSubmitBtn">
           <span>Unlock Command Center</span> →
         </button>
       </form>
+
+      <div style="font-size: 0.75rem; color: var(--text-muted);">
+        Secured with session authentication & token verification.
+      </div>
     </div>
   </div>
 
@@ -703,7 +888,7 @@
   <!-- 2. ADVANCED DASHBOARD CONSOLE                  -->
   <!-- ============================================== -->
   <div id="dashboardScreen">
-    <!-- Glassmorphism Top Bar -->
+    <!-- Header -->
     <header>
       <div class="brand">
         <div class="bot-avatar-wrap">
@@ -715,8 +900,8 @@
             <span id="botName">ALPHA - X</span>
             <span class="bot-badge">BOT</span>
           </div>
-          <div style="font-size: 0.75rem; color: var(--discord-green); font-weight: 600;">
-            ● COMMAND STATION ONLINE
+          <div class="operator-tag" id="currentOperatorBadge">
+            ● Operator Active: <span id="currentOperatorName" style="color: #fff; margin-left: 2px;">Operator</span>
           </div>
         </div>
       </div>
@@ -732,6 +917,9 @@
         <button class="nav-tab-btn" onclick="switchNavTab('feed')">
           <span>📜</span> Live Chat Feed
         </button>
+        <button class="nav-tab-btn" onclick="switchNavTab('operators')">
+          <span>👥</span> Active Users <span id="navOpCount" class="badge badge-green">1</span>
+        </button>
         <button class="nav-tab-btn" onclick="switchNavTab('telemetry')">
           <span>📊</span> Telemetry
         </button>
@@ -739,20 +927,20 @@
 
       <div class="header-actions">
         <div class="btn btn-secondary" id="pingBadge" style="cursor: default;">⚡ -- ms</div>
-        <button class="btn btn-secondary" onclick="refreshDashboard()" title="Refresh Data">↻</button>
+        <button class="btn btn-secondary" onclick="refreshDashboard()" title="Refresh Dashboard">↻</button>
         <button class="btn btn-danger" onclick="logout()" title="Lock Console">🚪 Log Out</button>
       </div>
     </header>
 
     <!-- Global Target Selector Bar -->
-    <div style="background: var(--bg-card); border-bottom: 1px solid var(--border); padding: 12px 28px; display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
-      <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 240px;">
+    <div class="target-bar">
+      <div class="target-item">
         <label style="margin: 0; white-space: nowrap;">Server:</label>
         <select id="globalServerSelect" onchange="onGlobalServerChange()" style="padding: 8px 12px;">
           <option value="">Loading servers...</option>
         </select>
       </div>
-      <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 240px;">
+      <div class="target-item">
         <label style="margin: 0; white-space: nowrap;">Channel:</label>
         <select id="globalChannelSelect" onchange="onGlobalChannelChange()" style="padding: 8px 12px;">
           <option value="">Select a server first...</option>
@@ -779,16 +967,16 @@
               </div>
             </div>
 
-            <!-- DM User Input (Hidden by default) -->
+            <!-- DM User Input -->
             <div id="dispatchDmGroup" class="form-group" style="display: none;">
               <label>Target Discord User ID</label>
               <input type="text" id="dispatchUserId" placeholder="e.g. 742183921829102839">
             </div>
 
-            <!-- Reply to Message ID (Optional) -->
+            <!-- Reply to Message ID -->
             <div class="form-group">
               <label>Reply to Message ID (Optional)</label>
-              <input type="text" id="replyMessageId" placeholder="Leave empty for new message, or paste Message ID to quote/reply">
+              <input type="text" id="replyMessageId" placeholder="Leave empty for normal message, or paste Message ID to quote/reply">
             </div>
 
             <!-- Formatting & Preset Toolbar -->
@@ -808,6 +996,7 @@
                 <span class="tool-btn template-badge" onclick="applyTemplate('announcement')">📢 Announce</span>
                 <span class="tool-btn template-badge" onclick="applyTemplate('rules')">📋 Rules</span>
                 <span class="tool-btn template-badge" onclick="applyTemplate('giveaway')">🎁 Giveaway</span>
+                <span class="tool-btn template-badge" onclick="applyTemplate('alert')">⚠️ Alert</span>
               </div>
             </div>
 
@@ -829,10 +1018,10 @@
           <div style="display: flex; flex-direction: column; gap: 20px;">
             <div class="card">
               <div class="card-title">
-                <span>📋 Live Audit Feed</span>
+                <span>📋 Live Console Activity Feed</span>
                 <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.75rem;" onclick="fetchLogs()">↻</button>
               </div>
-              <div id="liveAuditFeed" style="display: flex; flex-direction: column; gap: 8px; max-height: 380px; overflow-y: auto;">
+              <div id="liveAuditFeed" style="display: flex; flex-direction: column; gap: 8px; max-height: 400px; overflow-y: auto;">
                 <div style="color: var(--text-muted); font-size: 0.85rem; text-align: center; padding: 20px;">
                   No activities yet.
                 </div>
@@ -854,7 +1043,7 @@
             <div class="card-title">
               <span>🎨 Embed Studio Controls</span>
               <div style="display: flex; gap: 6px;">
-                <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="clearEmbedForm()">Reset</button>
+                <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="clearEmbedForm()">Reset Form</button>
               </div>
             </div>
 
@@ -872,17 +1061,17 @@
             <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 12px;">
               <div class="form-group">
                 <label>Embed Title</label>
-                <input type="text" id="embTitle" placeholder="e.g. Server Announcement" oninput="updateLivePreview()">
+                <input type="text" id="embTitle" placeholder="e.g. Special Announcement" oninput="updateLivePreview()">
               </div>
               <div class="form-group">
-                <label>Title URL Link (Optional)</label>
+                <label>Title Link URL (Optional)</label>
                 <input type="url" id="embUrl" placeholder="https://..." oninput="updateLivePreview()">
               </div>
             </div>
 
             <div class="form-group">
-              <label>Description</label>
-              <textarea id="embDesc" placeholder="Write embed body text (Markdown supported)..." oninput="updateLivePreview()"></textarea>
+              <label>Description (Markdown supported)</label>
+              <textarea id="embDesc" placeholder="Write embed body text here..." oninput="updateLivePreview()"></textarea>
             </div>
 
             <!-- Color Palette -->
@@ -1011,7 +1200,55 @@
       </div>
 
       <!-- ============================================== -->
-      <!-- TAB 4: SERVER TELEMETRY                        -->
+      <!-- TAB 4: ACTIVE OPERATORS (Requested Feature)    -->
+      <!-- ============================================== -->
+      <div id="viewOperators" class="panel-view">
+        <div style="display: flex; flex-direction: column; gap: 24px;">
+          
+          <!-- Summary Header -->
+          <div class="card">
+            <div class="card-title">
+              <div>
+                <span>👥 Active Operators & Access Monitor</span>
+                <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: normal; margin-top: 4px;">
+                  Real-time list of all users and team members currently accessing this dashboard
+                </div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <div class="operator-tag">
+                  <span style="font-size: 0.85rem;">●</span> Live Session Heartbeat Active
+                </div>
+                <button class="btn btn-secondary" onclick="fetchOperators()">↻ Refresh Operators</button>
+              </div>
+            </div>
+
+            <!-- Operators Grid -->
+            <div class="operators-grid" id="operatorsGrid">
+              <!-- Rendered via JS -->
+            </div>
+          </div>
+
+          <!-- Access Audit Trail -->
+          <div class="card">
+            <div class="card-title">
+              <span>🛡️ Security & Access Audit Trail</span>
+              <div style="display: flex; gap: 6px;">
+                <button class="tool-btn" id="filterAuditAll" onclick="setAuditFilter('all')" style="color:#fff; border-color:var(--discord-blurple);">All Events</button>
+                <button class="tool-btn" id="filterAuditLogins" onclick="setAuditFilter('logins')">Logins Only</button>
+                <button class="tool-btn" id="filterAuditDispatches" onclick="setAuditFilter('dispatches')">Dispatches Only</button>
+              </div>
+            </div>
+
+            <div id="operatorAuditList" style="display: flex; flex-direction: column; gap: 8px; max-height: 400px; overflow-y: auto;">
+              <div style="color: var(--text-muted); text-align: center; padding: 20px;">Loading access history...</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ============================================== -->
+      <!-- TAB 5: SERVER TELEMETRY                        -->
       <!-- ============================================== -->
       <div id="viewTelemetry" class="panel-view">
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
@@ -1022,7 +1259,7 @@
             </div>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
               <div style="background: var(--bg-input); padding: 16px; border-radius: 8px; border: 1px solid var(--border);">
-                <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 700;">SERVERS CONNECTED</div>
+                <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 700;">CONNECTED SERVERS</div>
                 <div style="font-size: 1.6rem; font-weight: 800; margin-top: 4px;" id="statGuilds">0</div>
               </div>
               <div style="background: var(--bg-input); padding: 16px; border-radius: 8px; border: 1px solid var(--border);">
@@ -1046,12 +1283,12 @@
 
           <div class="card">
             <div class="card-title">
-              <span>🛡️ Security & Operations</span>
+              <span>🛡️ Security & Multi-Operator Access</span>
             </div>
             <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.5;">
-              This dashboard is powered by serverless cryptographic HMAC-SHA256 session tokens. Access is locked with your operator passcode.
+              This dashboard is deployed on high-availability serverless infrastructure. Operator sessions are cryptographically signed with HMAC-SHA256 tokens and tracked with heartbeats.
             </p>
-            <div style="display: flex; gap: 10px;">
+            <div style="display: flex; gap: 10px; margin-top: 10px;">
               <button class="btn btn-danger" onclick="logout()">Lock Session & Exit</button>
             </div>
           </div>
@@ -1071,6 +1308,8 @@
     let customFields = [];
     let currentFeedChannelId = null;
     let feedInterval = null;
+    let heartbeatInterval = null;
+    let auditFilter = 'all';
 
     function getSessionToken() {
       return localStorage.getItem('alphax_session_token') || '';
@@ -1079,6 +1318,14 @@
     function setSessionToken(token) {
       if (token) localStorage.setItem('alphax_session_token', token);
       else localStorage.removeItem('alphax_session_token');
+    }
+
+    function getOperatorName() {
+      return localStorage.getItem('alphax_operator_name') || 'Admin';
+    }
+
+    function setOperatorName(name) {
+      localStorage.setItem('alphax_operator_name', name);
     }
 
     function getHeaders() {
@@ -1106,6 +1353,10 @@
     /* SESSION & AUTH                                       */
     /* ---------------------------------------------------- */
     async function checkExistingSession() {
+      const savedName = getOperatorName();
+      const opInput = document.getElementById('operatorNameInput');
+      if (opInput) opInput.value = savedName;
+
       const token = getSessionToken();
       if (!token) {
         showLoginScreen();
@@ -1114,6 +1365,11 @@
       try {
         const res = await fetch('/api/verify', { headers: getHeaders() });
         if (res.ok) {
+          const data = await res.json();
+          if (data.operator) {
+            setOperatorName(data.operator);
+            updateOperatorDisplay(data.operator);
+          }
           showDashboardScreen();
           refreshDashboard();
         } else {
@@ -1125,38 +1381,66 @@
       }
     }
 
+    function updateOperatorDisplay(name) {
+      const el = document.getElementById('currentOperatorName');
+      if (el) el.textContent = name;
+    }
+
     function showLoginScreen() {
       document.getElementById('loginScreen').style.display = 'flex';
       document.getElementById('dashboardScreen').style.display = 'none';
       if (feedInterval) clearInterval(feedInterval);
+      if (heartbeatInterval) clearInterval(heartbeatInterval);
     }
 
     function showDashboardScreen() {
       document.getElementById('loginScreen').style.display = 'none';
       document.getElementById('dashboardScreen').style.display = 'flex';
+      updateOperatorDisplay(getOperatorName());
+
+      // Start client heartbeat every 25 seconds
+      if (heartbeatInterval) clearInterval(heartbeatInterval);
+      heartbeatInterval = setInterval(sendHeartbeat, 25000);
+    }
+
+    async function sendHeartbeat() {
+      try {
+        const res = await fetch('/api/heartbeat', {
+          method: 'POST',
+          headers: getHeaders()
+        });
+        if (res.status === 401) {
+          logout();
+        } else {
+          fetchOperators(true);
+        }
+      } catch (e) {}
     }
 
     async function handleLoginSubmit(e) {
       e.preventDefault();
+      const name = document.getElementById('operatorNameInput').value.trim() || 'Operator';
       const pw = document.getElementById('passwordInput').value.trim();
       const btn = document.getElementById('loginSubmitBtn');
       const err = document.getElementById('loginErrorMsg');
 
       err.style.display = 'none';
       btn.disabled = true;
-      btn.innerHTML = 'Verifying...';
+      btn.innerHTML = 'Verifying Credentials...';
 
       try {
         const res = await fetch('/api/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ password: pw })
+          body: JSON.stringify({ password: pw, operator_name: name })
         });
         const data = await res.json();
         if (res.ok && data.success) {
           setSessionToken(data.token);
+          setOperatorName(data.operator || name);
           showDashboardScreen();
           refreshDashboard();
+          showToast(`Welcome back, ${data.operator || name}!`);
         } else {
           err.textContent = data.error || 'Access Denied: Incorrect operator password';
           err.style.display = 'block';
@@ -1194,8 +1478,13 @@
         document.querySelector('.nav-tab-btn:nth-child(3)').classList.add('active');
         document.getElementById('viewFeed').classList.add('active');
         fetchLiveMessages();
-      } else if (tab === 'telemetry') {
+      } else if (tab === 'operators') {
         document.querySelector('.nav-tab-btn:nth-child(4)').classList.add('active');
+        document.getElementById('viewOperators').classList.add('active');
+        fetchOperators();
+        fetchLogs();
+      } else if (tab === 'telemetry') {
+        document.querySelector('.nav-tab-btn:nth-child(5)').classList.add('active');
         document.getElementById('viewTelemetry').classList.add('active');
       }
     }
@@ -1291,6 +1580,101 @@
       fetchStatus();
       fetchLogs();
       fetchLiveMessages();
+      fetchOperators();
+    }
+
+    /* ---------------------------------------------------- */
+    /* OPERATORS & ACCESS TRACKING (Feature Requested)      */
+    /* ---------------------------------------------------- */
+    async function fetchOperators(silent = false) {
+      try {
+        const res = await fetch('/api/operators', { headers: getHeaders() });
+        if (!res.ok) return;
+        const data = await res.json();
+        const grid = document.getElementById('operatorsGrid');
+        const countBadge = document.getElementById('navOpCount');
+
+        const activeCount = data.count || (data.operators ? data.operators.filter(o => o.is_online).length : 1);
+        if (countBadge) countBadge.textContent = activeCount;
+
+        if (!grid) return;
+        const currentOpName = getOperatorName();
+
+        if (data.operators && data.operators.length > 0) {
+          grid.innerHTML = data.operators.map(op => {
+            const isMe = op.name.toLowerCase() === currentOpName.toLowerCase();
+            const initial = (op.name || 'O').charAt(0).toUpperCase();
+            return `
+              <div class="operator-card">
+                <div class="op-header">
+                  <div class="op-avatar-circle">
+                    ${initial}
+                    <div class="${op.is_online ? 'op-online-dot' : 'op-offline-dot'}"></div>
+                  </div>
+                  <div class="op-details">
+                    <div class="op-name">
+                      @${escapeHtml(op.name)}
+                      ${isMe ? '<span class="badge" style="background:#5865f2; font-size:0.65rem;">YOU</span>' : ''}
+                    </div>
+                    <div class="op-status-badge ${op.is_online ? 'op-status-online' : 'op-status-idle'}">
+                      ${op.is_online ? '🟢 Online Now' : '🟡 Idle'}
+                    </div>
+                  </div>
+                </div>
+
+                <div class="op-meta-list">
+                  <div class="op-meta-row">
+                    <span>Device / Browser</span>
+                    <span class="op-meta-val">${escapeHtml(op.device || 'Web Browser')}</span>
+                  </div>
+                  <div class="op-meta-row">
+                    <span>Approx. Location</span>
+                    <span class="op-meta-val">${escapeHtml(op.location || 'Online Client')}</span>
+                  </div>
+                  <div class="op-meta-row">
+                    <span>Session Login</span>
+                    <span class="op-meta-val">${op.login_time || '--:--'}</span>
+                  </div>
+                  <div class="op-meta-row">
+                    <span>Last Heartbeat</span>
+                    <span class="op-meta-val">${op.last_seen_str || '--:--'}</span>
+                  </div>
+                </div>
+              </div>
+            `;
+          }).join('');
+        } else {
+          // Fallback if empty
+          grid.innerHTML = `
+            <div class="operator-card">
+              <div class="op-header">
+                <div class="op-avatar-circle">
+                  ${(currentOpName || 'O').charAt(0).toUpperCase()}
+                  <div class="op-online-dot"></div>
+                </div>
+                <div class="op-details">
+                  <div class="op-name">@${escapeHtml(currentOpName)} <span class="badge" style="background:#5865f2; font-size:0.65rem;">YOU</span></div>
+                  <div class="op-status-badge op-status-online">🟢 Online Now</div>
+                </div>
+              </div>
+              <div class="op-meta-list">
+                <div class="op-meta-row"><span>Device</span><span class="op-meta-val">Current Browser</span></div>
+                <div class="op-meta-row"><span>Session Login</span><span class="op-meta-val">Active</span></div>
+              </div>
+            </div>
+          `;
+        }
+      } catch (e) {
+        if (!silent) console.error('Operator fetch failed:', e);
+      }
+    }
+
+    function setAuditFilter(type) {
+      auditFilter = type;
+      document.getElementById('filterAuditAll').style.borderColor = type === 'all' ? 'var(--discord-blurple)' : 'var(--border)';
+      document.getElementById('filterAuditLogins').style.borderColor = type === 'logins' ? 'var(--discord-blurple)' : 'var(--border)';
+      document.getElementById('filterAuditDispatches').style.borderColor = type === 'dispatches' ? 'var(--discord-blurple)' : 'var(--border)';
+      fetchLogs();
     }
 
     /* ---------------------------------------------------- */
@@ -1441,6 +1825,7 @@
       const banner = document.getElementById('embImage').value.trim();
       const footer = document.getElementById('embFooter').value.trim();
       const footerIcon = document.getElementById('embFooterIcon').value.trim();
+      const opName = getOperatorName();
 
       // Card border color
       document.getElementById('prevCard').style.borderLeftColor = color;
@@ -1474,7 +1859,7 @@
       else b.style.display = 'none';
 
       // Footer
-      document.getElementById('prevFooterText').textContent = (footer || 'Dispatched via Alpha-X Console') + ' • Today';
+      document.getElementById('prevFooterText').textContent = (footer || `Dispatched by @${opName}`) + ' • Today';
       const fImg = document.getElementById('prevFooterImg');
       if (footerIcon) { fImg.src = footerIcon; fImg.style.display = 'inline-block'; }
       else fImg.style.display = 'none';
@@ -1514,25 +1899,31 @@
       clearEmbedForm();
       if (type === 'announcement') {
         document.getElementById('embTitle').value = '📢 SERVER ANNOUNCEMENT';
-        document.getElementById('embDesc').value = 'Attention @everyone!\n\nWe have exciting updates and new features arriving today. Please check the pins for more details!';
+        document.getElementById('embDesc').value = 'Attention @everyone!\n\nWe have exciting updates and new server improvements rolling out today. Please check the announcements channel for details!';
         setEmbedColor('#5865f2');
-        addEmbedField('Version', '2.0 Update', true);
-        addEmbedField('Status', '🟢 Online', true);
+        addEmbedField('Status', '🟢 Live', true);
+        addEmbedField('Target', 'All Guild Members', true);
       } else if (type === 'rules') {
         document.getElementById('embTitle').value = '📋 SERVER RULES & GUIDELINES';
-        document.getElementById('embDesc').value = 'Welcome to the server! To ensure a friendly environment for everyone, please respect the rules below.';
+        document.getElementById('embDesc').value = 'Welcome to the server! Please adhere to our community standards:';
         setEmbedColor('#fee75c');
-        addEmbedField('1. Be Respectful', 'Treat all members with kindness.', false);
-        addEmbedField('2. No Spam', 'Keep chat clean and appropriate.', false);
+        addEmbedField('1. Respect Everyone', 'Harassment and toxicity will result in an immediate timeout or ban.', false);
+        addEmbedField('2. No Spam or Self-Promo', 'Keep all conversations in their designated channels.', false);
       } else if (type === 'giveaway') {
-        document.getElementById('embTitle').value = '🎁 SPECIAL COMMUNITY GIVEAWAY!';
-        document.getElementById('embDesc').value = 'We are hosting a special community giveaway!\n\nReact to participate and win amazing prizes.';
+        document.getElementById('embTitle').value = '🎁 COMMUNITY SPECIAL GIVEAWAY!';
+        document.getElementById('embDesc').value = 'We are hosting a special community giveaway event!\n\nReact below to enter and stand a chance to win exclusive roles and rewards.';
         setEmbedColor('#eb459e');
-        addEmbedField('Prize', 'VIP Discord Role & Perks', true);
-        addEmbedField('Ends', 'In 24 Hours', true);
+        addEmbedField('Prize', 'VIP Membership & Role', true);
+        addEmbedField('Duration', '24 Hours', true);
+      } else if (type === 'alert') {
+        document.getElementById('embTitle').value = '⚠️ IMPORTANT SERVER NOTICE';
+        document.getElementById('embDesc').value = 'Please be aware of scheduled bot and voice channel maintenance. Downtime is expected to be under 15 minutes.';
+        setEmbedColor('#ed4245');
+        addEmbedField('Estimated Downtime', '15 Mins', true);
+        addEmbedField('Priority', 'High', true);
       }
       updateLivePreview();
-      showToast(`Loaded ${type} template into Embed Studio!`);
+      showToast(`Loaded ${type} template!`);
     }
 
     async function dispatchEmbed() {
@@ -1600,7 +1991,6 @@
         const box = document.getElementById('chatFeedBox');
 
         if (res.ok && data.messages && data.messages.length > 0) {
-          // Discord returns messages newest first, reverse so oldest is top
           const msgs = [...data.messages].reverse();
           box.innerHTML = msgs.map(m => {
             const timeStr = m.timestamp ? new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
@@ -1664,10 +2054,17 @@
         const res = await fetch('/api/logs', { headers: getHeaders() });
         const data = await res.json();
         const feed = document.getElementById('liveAuditFeed');
+        const auditList = document.getElementById('operatorAuditList');
 
         if (res.ok && data.logs && data.logs.length > 0) {
-          feed.innerHTML = data.logs.map(log => `
-            <div style="background: var(--bg-input); padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border); font-size: 0.8rem;">
+          const filtered = data.logs.filter(log => {
+            if (auditFilter === 'logins') return log.type.includes('Login') || log.type.includes('Auth') || log.type.includes('Logout');
+            if (auditFilter === 'dispatches') return log.type.includes('Sent') || log.type.includes('Dispatched') || log.type.includes('Deleted');
+            return true;
+          });
+
+          const html = filtered.map(log => `
+            <div style="background: var(--bg-input); padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border); font-size: 0.8rem;">
               <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
                 <span style="font-weight: 700; color: ${log.status === 'error' ? 'var(--discord-red)' : 'var(--discord-blurple)'}">${escapeHtml(log.type)}</span>
                 <span style="color: var(--text-muted); font-family: 'JetBrains Mono', monospace;">${log.time}</span>
@@ -1675,6 +2072,12 @@
               <div style="color: var(--text-main); line-height: 1.3;">${escapeHtml(log.details)}</div>
             </div>
           `).join('');
+
+          if (feed) feed.innerHTML = html;
+          if (auditList) auditList.innerHTML = html;
+        } else {
+          if (feed) feed.innerHTML = '<div style="color: var(--text-muted); text-align: center; padding: 20px;">No activities recorded yet.</div>';
+          if (auditList) auditList.innerHTML = '<div style="color: var(--text-muted); text-align: center; padding: 20px;">No access events recorded yet.</div>';
         }
       } catch (e) {}
     }
@@ -1692,10 +2095,10 @@
       }
     });
 
-    // Initial boot
+    // Boot
     checkExistingSession();
     feedInterval = setInterval(() => {
-      const isFeedActive = document.getElementById('viewFeed').classList.contains('active');
+      const isFeedActive = document.getElementById('viewFeed')?.classList.contains('active');
       if (isFeedActive) fetchLiveMessages();
     }, 4000);
   </script>

@@ -10,11 +10,12 @@ import urllib.error
 from datetime import datetime
 
 activity_logs = []
+active_operators = {}
 
 def add_log(event_type, details, status="success"):
     now = datetime.now().strftime("%H:%M:%S")
     activity_logs.insert(0, {"time": now, "type": event_type, "details": details, "status": status})
-    if len(activity_logs) > 60:
+    if len(activity_logs) > 100:
         activity_logs.pop()
 
 def get_secret():
@@ -22,22 +23,62 @@ def get_secret():
     tok = os.environ.get("DISCORD_TOKEN", "").strip()[:12]
     return f"alphax_{pw}_{tok}".encode("utf-8")
 
-def generate_token():
+def generate_token(operator_name="Operator"):
     ts = str(int(time.time()))
-    sig = hmac.new(get_secret(), ts.encode("utf-8"), hashlib.sha256).hexdigest()
-    return f"{ts}.{sig}"
+    safe_name = "".join(c for c in operator_name if c.isalnum() or c in ("-", "_", " "))[:24].strip() or "Operator"
+    raw = f"{ts}.{safe_name}"
+    sig = hmac.new(get_secret(), raw.encode("utf-8"), hashlib.sha256).hexdigest()
+    return f"{raw}.{sig}"
 
 def verify_token(token):
-    if not token or "." not in token:
-        return False
-    try:
-        ts, sig = token.split(".", 1)
-        if time.time() - int(ts) > 1209600:
-            return False
-        expected_sig = hmac.new(get_secret(), ts.encode("utf-8"), hashlib.sha256).hexdigest()
-        return hmac.compare_digest(sig, expected_sig)
-    except Exception:
-        return False
+    if not token:
+        return ("", False)
+    parts = token.split(".")
+    if len(parts) == 3:
+        ts, name, sig = parts
+        try:
+            if time.time() - int(ts) > 1209600:  # 14 days validity
+                return ("", False)
+            raw = f"{ts}.{name}"
+            expected_sig = hmac.new(get_secret(), raw.encode("utf-8"), hashlib.sha256).hexdigest()
+            if hmac.compare_digest(sig, expected_sig):
+                return (name, True)
+        except Exception:
+            return ("", False)
+    elif len(parts) == 2:
+        ts, sig = parts
+        try:
+            if time.time() - int(ts) > 1209600:
+                return ("", False)
+            expected_sig = hmac.new(get_secret(), ts.encode("utf-8"), hashlib.sha256).hexdigest()
+            if hmac.compare_digest(sig, expected_sig):
+                return ("Operator", True)
+        except Exception:
+            return ("", False)
+    return ("", False)
+
+def parse_device(ua_str):
+    if not ua_str:
+        return "Unknown Device"
+    ua = ua_str.lower()
+    os_name = "Windows" if "windows" in ua else "Mac" if "mac" in ua else "iPhone" if "iphone" in ua else "Android" if "android" in ua else "Linux" if "linux" in ua else "Device"
+    browser = "Chrome" if "chrome" in ua and "edg" not in ua else "Edge" if "edg" in ua else "Firefox" if "firefox" in ua else "Safari" if "safari" in ua and "chrome" not in ua else "Browser"
+    return f"{os_name} • {browser}"
+
+def parse_location(headers):
+    city = headers.get("x-vercel-ip-city", "")
+    country = headers.get("x-vercel-ip-country", "")
+    ip = headers.get("x-forwarded-for", "").split(",")[0].strip() or headers.get("x-real-ip", "")
+    parts = []
+    if city:
+        parts.append(city)
+    if country:
+        parts.append(country)
+    if parts:
+        return ", ".join(parts)
+    if ip:
+        return f"IP: {ip}"
+    return "Web Client"
 
 def discord_api(endpoint, method="GET", payload=None):
     token = os.environ.get("DISCORD_TOKEN", "").strip()
@@ -83,13 +124,31 @@ class handler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS, DELETE, PUT")
         self.end_headers()
 
-    def is_auth(self):
+    def get_auth_info(self):
         token = self.headers.get("X-Session-Token", "").strip()
         if not token:
             auth_header = self.headers.get("Authorization", "").strip()
             if auth_header.startswith("Bearer "):
                 token = auth_header[7:].strip()
-        return verify_token(token)
+        name, valid = verify_token(token)
+        if valid:
+            now_ts = int(time.time())
+            op_key = f"{name}_{token[-8:]}"
+            existing = active_operators.get(op_key, {})
+            login_time = existing.get("login_time", datetime.now().strftime("%H:%M:%S"))
+            active_operators[op_key] = {
+                "name": name,
+                "device": parse_device(self.headers.get("User-Agent", "")),
+                "location": parse_location(self.headers),
+                "login_time": login_time,
+                "last_seen": now_ts,
+                "last_seen_str": datetime.now().strftime("%H:%M:%S")
+            }
+        return (name, valid)
+
+    def is_auth(self):
+        _, valid = self.get_auth_info()
+        return valid
 
     def get_resolved_path(self):
         parsed = urlparse(self.path)
@@ -116,8 +175,8 @@ class handler(BaseHTTPRequestHandler):
 
         # 1. Verify Session
         if resolved_path == "/api/verify":
-            valid = self.is_auth()
-            return self.send_json(200 if valid else 401, {"valid": valid})
+            name, valid = self.get_auth_info()
+            return self.send_json(200 if valid else 401, {"valid": valid, "operator": name})
 
         # 2. Status & Guilds
         if resolved_path == "/api/status":
@@ -158,14 +217,13 @@ class handler(BaseHTTPRequestHandler):
                 text_channels = [{
                     "id": c["id"],
                     "name": c["name"],
-                    "topic": c.get("topic", ""),
                     "category": "Text Channels"
                 } for c in (channels or []) if c.get("type") in (0, 5)]
                 return self.send_json(200, {"channels": text_channels})
             except Exception as e:
                 return self.send_json(500, {"error": str(e)})
 
-        # 4. Read Live Channel Messages (Chat Viewer)
+        # 4. Live Channel Chat Messages
         if resolved_path == "/api/messages":
             if not self.is_auth():
                 return self.send_json(401, {"error": "Unauthorized: Session invalid or expired"})
@@ -173,7 +231,7 @@ class handler(BaseHTTPRequestHandler):
             if not channel_id:
                 return self.send_json(400, {"error": "Missing channel_id parameter"})
             try:
-                msgs = discord_api(f"/channels/{channel_id}/messages?limit=25")
+                msgs = discord_api(f"/channels/{channel_id}/messages?limit=30")
                 formatted = []
                 for m in (msgs or []):
                     author = m.get("author", {})
@@ -196,13 +254,37 @@ class handler(BaseHTTPRequestHandler):
             except Exception as e:
                 return self.send_json(500, {"error": str(e)})
 
-        # 5. Activity Logs
+        # 5. Active Operators Tracker
+        if resolved_path == "/api/operators":
+            if not self.is_auth():
+                return self.send_json(401, {"error": "Unauthorized: Session invalid or expired"})
+            now = int(time.time())
+            active_list = []
+            for k, op in list(active_operators.items()):
+                # Keep if accessed in last 15 minutes
+                if now - op.get("last_seen", 0) < 900:
+                    is_online = (now - op.get("last_seen", 0)) < 75
+                    active_list.append({
+                        "name": op.get("name", "Operator"),
+                        "device": op.get("device", "Unknown"),
+                        "location": op.get("location", "Web Client"),
+                        "login_time": op.get("login_time", "--:--"),
+                        "last_seen_str": op.get("last_seen_str", "--:--"),
+                        "is_online": is_online
+                    })
+            active_list.sort(key=lambda x: (x["is_online"], x.get("last_seen_str", "")), reverse=True)
+            return self.send_json(200, {
+                "operators": active_list,
+                "count": len([o for o in active_list if o["is_online"]])
+            })
+
+        # 6. Activity Logs
         if resolved_path == "/api/logs":
             if not self.is_auth():
                 return self.send_json(401, {"error": "Unauthorized: Session invalid or expired"})
             return self.send_json(200, {"logs": activity_logs})
 
-        # Default: Serve Modern HTML Dashboard
+        # Default: Serve HTML
         candidates = [
             os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "templates", "index.html"),
             os.path.join(os.getcwd(), "templates", "index.html"),
@@ -233,33 +315,57 @@ class handler(BaseHTTPRequestHandler):
         # Login
         if resolved_path == "/api/login":
             password = (body.get("password") or "").strip()
+            operator_name = (body.get("operator_name") or "Operator").strip() or "Operator"
             target_pw = os.environ.get("DASHBOARD_PASSWORD", "0000").strip() or "0000"
             if password == target_pw:
-                token = generate_token()
-                add_log("Auth", "Operator unlocked console", "success")
-                return self.send_json(200, {"success": True, "token": token})
-            add_log("Auth Failed", "Invalid password attempted", "error")
+                token = generate_token(operator_name)
+                device = parse_device(self.headers.get("User-Agent", ""))
+                loc = parse_location(self.headers)
+                now_str = datetime.now().strftime("%H:%M:%S")
+                op_key = f"{operator_name}_{token[-8:]}"
+                active_operators[op_key] = {
+                    "name": operator_name,
+                    "device": device,
+                    "location": loc,
+                    "login_time": now_str,
+                    "last_seen": int(time.time()),
+                    "last_seen_str": now_str
+                }
+                add_log("Operator Login", f"@{operator_name} logged in from {loc} ({device})", "success")
+                return self.send_json(200, {"success": True, "token": token, "operator": operator_name})
+            add_log("Auth Failed", f"Failed login attempt for '{operator_name}'", "error")
             return self.send_json(401, {"error": "Access Denied: Incorrect operator password"})
+
+        # Heartbeat
+        if resolved_path == "/api/heartbeat":
+            name, valid = self.get_auth_info()
+            return self.send_json(200 if valid else 401, {"alive": valid, "operator": name})
 
         # Logout
         if resolved_path == "/api/logout":
+            name, _ = self.get_auth_info()
+            token = self.headers.get("X-Session-Token", "").strip() or self.headers.get("Authorization", "").replace("Bearer ", "").strip()
+            if token and name:
+                op_key = f"{name}_{token[-8:]}"
+                active_operators.pop(op_key, None)
+            if name:
+                add_log("Operator Logout", f"@{name} logged out", "info")
             return self.send_json(200, {"success": True})
 
-        # Protected operations
-        if not self.is_auth():
+        # Protected: Send Message
+        operator_name, is_valid = self.get_auth_info()
+        if not is_valid:
             return self.send_json(401, {"error": "Unauthorized: Session invalid or expired"})
 
-        # Dispatch Message / Embed
         if resolved_path == "/api/send":
             mode = body.get("mode", "channel")
             message = (body.get("message") or "").strip()
             reply_to = body.get("reply_to_id")
-            
+
             payload = {}
             if message:
                 payload["content"] = message
 
-            # Advanced Embed Handling
             if body.get("is_embed"):
                 embed_obj = {}
                 if body.get("embed_title"):
@@ -281,29 +387,22 @@ class handler(BaseHTTPRequestHandler):
                         author_data["icon_url"] = body["embed_author_icon"].strip()
                     embed_obj["author"] = author_data
 
-                if body.get("embed_footer"):
-                    footer_data = {"text": body["embed_footer"].strip()}
-                    if body.get("embed_footer_icon"):
-                        footer_data["icon_url"] = body["embed_footer_icon"].strip()
-                    embed_obj["footer"] = footer_data
-                else:
-                    embed_obj["footer"] = {"text": "Dispatched via Alpha-X Console"}
+                footer_text = body.get("embed_footer", "").strip() or f"Dispatched by @{operator_name}"
+                embed_obj["footer"] = {"text": footer_text}
 
                 if body.get("embed_thumbnail"):
                     embed_obj["thumbnail"] = {"url": body["embed_thumbnail"].strip()}
-
                 if body.get("embed_image"):
                     embed_obj["image"] = {"url": body["embed_image"].strip()}
 
-                # Custom Fields
                 fields = body.get("embed_fields", [])
                 if isinstance(fields, list) and fields:
                     valid_fields = []
                     for f in fields:
-                        name = (f.get("name") or "").strip()
-                        val = (f.get("value") or "").strip()
-                        if name and val:
-                            valid_fields.append({"name": name, "value": val, "inline": bool(f.get("inline"))})
+                        n = (f.get("name") or "").strip()
+                        v = (f.get("value") or "").strip()
+                        if n and v:
+                            valid_fields.append({"name": n, "value": v, "inline": bool(f.get("inline"))})
                     if valid_fields:
                         embed_obj["fields"] = valid_fields
 
@@ -312,7 +411,6 @@ class handler(BaseHTTPRequestHandler):
 
                 payload["embeds"] = [embed_obj]
 
-            # Message reply reference
             if reply_to:
                 payload["message_reference"] = {"message_id": str(reply_to).strip()}
 
@@ -326,7 +424,7 @@ class handler(BaseHTTPRequestHandler):
                         return self.send_json(400, {"error": "channel_id is required"})
                     sent = discord_api(f"/channels/{channel_id}/messages", method="POST", payload=payload)
                     preview = (body.get("embed_title") or message)[:40]
-                    add_log("Message Dispatched", f"To channel ID {channel_id}: {preview}", "success")
+                    add_log("Message Sent", f"@{operator_name} -> Channel ID {channel_id}: {preview}", "success")
                     return self.send_json(200, {"success": True, "message_id": sent.get("id"), "channel": channel_id})
                 elif mode == "dm":
                     user_id = body.get("user_id")
@@ -335,7 +433,7 @@ class handler(BaseHTTPRequestHandler):
                     dm_channel = discord_api("/users/@me/channels", method="POST", payload={"recipient_id": user_id})
                     sent = discord_api(f"/channels/{dm_channel['id']}/messages", method="POST", payload=payload)
                     preview = (body.get("embed_title") or message)[:40]
-                    add_log("DM Dispatched", f"To User ID {user_id}: {preview}", "success")
+                    add_log("DM Sent", f"@{operator_name} -> User ID {user_id}: {preview}", "success")
                     return self.send_json(200, {"success": True, "message_id": sent.get("id"), "user": user_id})
             except Exception as e:
                 return self.send_json(500, {"error": str(e)})
@@ -348,7 +446,7 @@ class handler(BaseHTTPRequestHandler):
                 return self.send_json(400, {"error": "channel_id and message_id are required"})
             try:
                 discord_api(f"/channels/{channel_id}/messages/{message_id}", method="DELETE")
-                add_log("Message Deleted", f"Deleted message ID {message_id}", "info")
+                add_log("Message Deleted", f"@{operator_name} deleted msg {message_id}", "info")
                 return self.send_json(200, {"success": True})
             except Exception as e:
                 return self.send_json(500, {"error": str(e)})
